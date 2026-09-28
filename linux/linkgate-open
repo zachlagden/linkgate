@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exe="__LINKGATE_EXE__"
+
+if [ $# -lt 1 ] || [ -z "$1" ]; then
+  echo "usage: linkgate-open <url or file>" >&2
+  exit 2
+fi
+
+if ! grep -qs '^enabled' /proc/sys/fs/binfmt_misc/WSLInterop; then
+  echo "linkgate: WSL interop is disabled, so Windows programs can't start" >&2
+  exit 1
+fi
+
+if [ ! -x "$exe" ]; then
+  echo "linkgate: $exe is missing, run scripts/install.sh" >&2
+  exit 1
+fi
+
+target=$1
+if [[ ! $target =~ ^[A-Za-z][A-Za-z0-9+.-]*: ]] && [ -e "$target" ]; then
+  windows_path=$(wslpath -w "$(realpath "$target")" | tr '\\' '/')
+  if [[ $windows_path == //* ]]; then
+    target="file:$windows_path"
+  else
+    target="file:///$windows_path"
+  fi
+fi
+
+setsid "$exe" "$target" </dev/null >/dev/null 2>&1 &

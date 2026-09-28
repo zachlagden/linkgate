@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=linkgate
+Comment=Choose a Windows browser for links opened in WSL
+Exec=__LINKGATE_OPEN__ %u
+Type=Application
+NoDisplay=true
+MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;
