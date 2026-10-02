@@ -4,4 +4,4 @@ Comment=Choose a Windows browser for links opened in WSL
 Exec=__LINKGATE_OPEN__ %u
 Type=Application
 NoDisplay=true
-MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;application/pdf;image/png;image/jpeg;image/gif;image/webp;image/svg+xml;

@@ -33,7 +33,7 @@ mkdir -p "$bin_dir" "$apps_dir"
 sed "s|__LINKGATE_EXE__|$exe|" "$root/linux/linkgate-open" > "$bin_dir/linkgate-open"
 chmod +x "$bin_dir/linkgate-open"
 sed "s|__LINKGATE_OPEN__|$bin_dir/linkgate-open|" "$root/linux/linkgate.desktop" > "$apps_dir/linkgate.desktop"
-xdg-mime default linkgate.desktop x-scheme-handler/http x-scheme-handler/https text/html
+xdg-mime default linkgate.desktop x-scheme-handler/http x-scheme-handler/https text/html application/pdf image/png image/jpeg image/gif image/webp image/svg+xml
 
 setsid "$exe" --update-lists </dev/null >/dev/null 2>&1 &
 

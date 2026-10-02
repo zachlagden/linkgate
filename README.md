@@ -1,6 +1,6 @@
 # linkgate
 
-A small Windows window that asks where a link should go. When a program in WSL tries to open a link, linkgate appears in the middle of whichever monitor the mouse is on and offers every installed Windows browser plus "Copy link". Pressing a button runs that action and closes the window. After 10 seconds with no choice, it closes and does nothing.
+A small Windows window that asks where a link should go. When a program in WSL tries to open a link or a PDF or image file, linkgate appears in the middle of whichever monitor the mouse is on and offers every installed Windows browser plus "Copy link". Pressing a button runs that action and closes the window. After 10 seconds with no choice, it closes and does nothing.
 
 It also helps spot fake links:
 
@@ -18,6 +18,8 @@ program in WSL
   → linkgate.exe <url>                  (through WSL interop)
   → window on the monitor under the cursor
 ```
+
+`linkgate-open` turns a WSL path, or a `file://` link to one, into the matching Windows link before it starts `linkgate.exe`. `/tmp/a.pdf` becomes `file://wsl.localhost/<distro>/tmp/a.pdf`, and `/mnt/c/...` becomes `file:///C:/...`. The handler is registered for PDF, PNG, JPEG, GIF, WebP and SVG files as well as `http`, `https` and HTML, so `xdg-open` on those files shows the picker.
 
 `linkgate.exe` is a Tauri 2 app. The Rust side parses the link, looks up the blocklists, reads installed browsers from `StartMenuInternet` in the registry, extracts their icons and launches the chosen one. The window is React and Tailwind, with a custom title bar and no Windows frame.
 
@@ -54,7 +56,7 @@ pnpm install
 pnpm install:windows
 ```
 
-This builds `linkgate.exe`, copies it to `%LOCALAPPDATA%\Programs\linkgate`, installs `~/.local/bin/linkgate-open` and a `linkgate.desktop` handler, sets it as the default for `http`, `https` and `text/html`, and downloads the blocklists. Two settings are left to you:
+This builds `linkgate.exe`, copies it to `%LOCALAPPDATA%\Programs\linkgate`, installs `~/.local/bin/linkgate-open` and a `linkgate.desktop` handler, sets it as the default for `http`, `https`, `text/html`, `application/pdf` and the image types above, and downloads the blocklists. Two settings are left to you:
 
 ```bash
 echo 'export BROWSER="$HOME/.local/bin/linkgate-open"' >> ~/.zshenv

@@ -18,13 +18,26 @@ if [ ! -x "$exe" ]; then
   exit 1
 fi
 
+urldecode() {
+  python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(sys.argv[1]), end="")' "$1"
+}
+
+urlencode() {
+  python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/:"), end="")' "$1"
+}
+
 target=$1
+case $target in
+  file:///*) target=$(urldecode "${target#file://}") ;;
+  file://localhost/*) target=$(urldecode "${target#file://localhost}") ;;
+esac
+
 if [[ ! $target =~ ^[A-Za-z][A-Za-z0-9+.-]*: ]] && [ -e "$target" ]; then
-  windows_path=$(wslpath -w "$(realpath "$target")" | tr '\\' '/')
+  windows_path=$(wslpath -m "$(realpath "$target")")
   if [[ $windows_path == //* ]]; then
-    target="file:$windows_path"
+    target="file:$(urlencode "$windows_path")"
   else
-    target="file:///$windows_path"
+    target="file:///$(urlencode "$windows_path")"
   fi
 fi
 
