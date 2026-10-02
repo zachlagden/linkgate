@@ -5,6 +5,7 @@
 ### Added
 
 - `xdg-open` on a PDF, PNG, JPEG, GIF, WebP or SVG file shows the picker, with the WSL path converted to its Windows `file:` link.
+- Network file links open in Firefox, which needs five slashes for `wsl.localhost` paths.
 - `linkgate-open` accepts `file://` links to WSL paths and percent-encodes special characters in converted paths.
 
 ## [0.1.0]

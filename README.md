@@ -19,7 +19,7 @@ program in WSL
   → window on the monitor under the cursor
 ```
 
-`linkgate-open` turns a WSL path, or a `file://` link to one, into the matching Windows link before it starts `linkgate.exe`. `/tmp/a.pdf` becomes `file://wsl.localhost/<distro>/tmp/a.pdf`, and `/mnt/c/...` becomes `file:///C:/...`. The handler is registered for PDF, PNG, JPEG, GIF, WebP and SVG files as well as `http`, `https` and HTML, so `xdg-open` on those files shows the picker.
+`linkgate-open` turns a WSL path, or a `file://` link to one, into the matching Windows link before it starts `linkgate.exe`. `/tmp/a.pdf` becomes `file://wsl.localhost/<distro>/tmp/a.pdf`, which linkgate hands to the browser as `file://///wsl.localhost/<distro>/tmp/a.pdf` because Firefox only reads network paths in that form, and `/mnt/c/...` becomes `file:///C:/...`. The handler is registered for PDF, PNG, JPEG, GIF, WebP and SVG files as well as `http`, `https` and HTML, so `xdg-open` on those files shows the picker.
 
 `linkgate.exe` is a Tauri 2 app. The Rust side parses the link, looks up the blocklists, reads installed browsers from `StartMenuInternet` in the registry, extracts their icons and launches the chosen one. The window is React and Tailwind, with a custom title bar and no Windows frame.
 

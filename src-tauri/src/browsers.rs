@@ -194,8 +194,34 @@ pub fn views(browsers: &[Browser], prefs: &settings::Settings) -> Vec<BrowserVie
 
 pub fn launch(browser: &Browser, url: &str) -> Result<(), String> {
     std::process::Command::new(&browser.exe)
-        .arg(url)
+        .arg(launch_url(url))
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("Couldn't start {}: {e}", browser.name))
+}
+
+fn launch_url(url: &str) -> String {
+    match url.strip_prefix("file://") {
+        Some(rest) if !rest.starts_with('/') => format!("file://///{rest}"),
+        _ => url.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::launch_url;
+
+    #[test]
+    fn network_file_links_use_five_slashes() {
+        assert_eq!(
+            launch_url("file://wsl.localhost/Ubuntu/tmp/a.pdf"),
+            "file://///wsl.localhost/Ubuntu/tmp/a.pdf"
+        );
+    }
+
+    #[test]
+    fn other_links_are_unchanged() {
+        assert_eq!(launch_url("file:///C:/a.pdf"), "file:///C:/a.pdf");
+        assert_eq!(launch_url("https://example.com/"), "https://example.com/");
+    }
 }

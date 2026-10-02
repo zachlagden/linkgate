@@ -124,6 +124,12 @@ mod tests {
     }
 
     #[test]
+    fn keeps_the_host_of_network_file_links() {
+        let parsed = parse("file://wsl.localhost/Ubuntu/tmp/a%20b.pdf").unwrap();
+        assert_eq!(parsed.view.href, "file://wsl.localhost/Ubuntu/tmp/a%20b.pdf");
+    }
+
+    #[test]
     fn rejects_non_urls() {
         assert!(parse("not a link").is_none());
     }
