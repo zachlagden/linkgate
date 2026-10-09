@@ -51,6 +51,7 @@ export interface InitialState {
   hits: ListHit[];
   browsers: BrowserView[];
   lists: ListsStatus;
+  blocklistEnabled: boolean;
   version: string;
 }
 
@@ -63,6 +64,7 @@ export const api = {
   dismiss: (): Promise<void> => invoke("dismiss"),
   setBrowserHidden: (id: string, hidden: boolean): Promise<BrowserView[]> =>
     invoke("set_browser_hidden", { id, hidden }),
+  setBlocklistEnabled: (enabled: boolean): Promise<void> => invoke("set_blocklist_enabled", { enabled }),
   updateLists: (): Promise<ListsStatus> => invoke("update_lists"),
   listsStatus: (): Promise<ListsStatus> => invoke("lists_status"),
 };

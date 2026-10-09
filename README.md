@@ -43,10 +43,10 @@ It is a Tauri 2 app. The Rust side handles parsing, blocklist lookups, browser d
 | Browser choice | Lists every browser registered under `StartMenuInternet` in the Windows registry, with its icon, and marks your default. Hide the ones you don't want in settings. |
 | Link anatomy | Shows the registrable domain large and the subdomain dimmed, so `paypal.com.account-check.io` reads as `account-check.io`. The full link is coloured by part: scheme, subdomain, domain, port, path, query keys, query values and fragment. |
 | Warnings | Flags plain `http`, text before an `@` (which is not the site), punycode domains that imitate other letters, raw IP addresses and unusual ports. |
-| Blocklist check | Checks the domain and its parent domains against the malicious, suspicious and tracking lists from [Pi-hole Optimized Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists). A match adds a confirmation step and never blocks the link. |
+| Blocklist check | Checks the domain and its parent domains against the malicious, suspicious and tracking lists from [Pi-hole Optimized Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists). A match adds a confirmation step and never blocks the link. A switch in settings turns the check off. |
 | Files from WSL | Converts WSL paths and `file://` links to Windows links for PDF, PNG, JPEG, GIF, WebP and SVG files. |
 | Keyboard first | `1` to `9` open in a browser, `C` copies the link, `Esc` closes. |
-| Private | Links are never logged. The only network traffic is the blocklist download. |
+| Private | Links are never logged. The only network traffic is the blocklist download, which you can turn off. |
 
 ---
 
@@ -130,7 +130,7 @@ Replace `<you>` with your Windows user name, and use double backslashes because 
 | `Esc` | Close, or go back from a confirmation or settings |
 | `Enter` | Confirm, on the blocklist confirmation |
 
-Run `linkgate.exe` with no link, or click the gear in the title bar, to open settings. There you choose which browsers appear and check the blocklists by hand.
+Run `linkgate.exe` with no link, or click the gear in the title bar, to open settings. There you choose which browsers appear, turn the blocklist check on or off, and check the blocklists by hand.
 
 ### Warnings
 
@@ -170,12 +170,14 @@ Firefox reads a WSL file only as `file://///wsl.localhost/<distro>/...`, with fi
 
 Blocklists are downloaded to `%LOCALAPPDATA%\linkgate\lists` and converted to a sorted index that is memory-mapped and binary-searched, so a lookup doesn't load the 2 million domain list into memory. When linkgate starts and the last check is more than 24 hours old, it starts a detached `linkgate.exe --update-lists` process that fetches only the lists whose ETag changed.
 
+Turn off "Check links against the blocklists" in settings and linkgate stops looking links up and stops downloading lists, so it makes no network requests. The lists already on disk stay there, and the check resumes when you turn the switch back on.
+
 ### Where files live
 
 | Path | Contents |
 | --- | --- |
 | `%LOCALAPPDATA%\Programs\linkgate\linkgate.exe` | The app |
-| `%APPDATA%\linkgate\settings.json` | Hidden browsers |
+| `%APPDATA%\linkgate\settings.json` | Hidden browsers and the blocklist switch |
 | `%LOCALAPPDATA%\linkgate\lists\` | Blocklists and their index |
 | `%LOCALAPPDATA%\linkgate\icons\` | Cached browser icons |
 | `%LOCALAPPDATA%\linkgate\linkgate.log` | Errors as JSON lines. Links are never logged. |

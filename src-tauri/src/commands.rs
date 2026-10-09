@@ -21,6 +21,7 @@ pub struct InitialState {
     hits: Vec<ListHit>,
     browsers: Vec<BrowserView>,
     lists: ListsStatus,
+    blocklist_enabled: bool,
     version: &'static str,
 }
 
@@ -42,6 +43,7 @@ pub async fn initial_state(state: State<'_, AppState>) -> Result<InitialState, S
         hits: state.hits.clone(),
         browsers: refresh_browsers(&state),
         lists: lists::status(),
+        blocklist_enabled: settings::load().blocklist_enabled,
         version: env!("CARGO_PKG_VERSION"),
     })
 }
@@ -113,7 +115,17 @@ pub async fn set_browser_hidden(
 }
 
 #[tauri::command]
+pub fn set_blocklist_enabled(enabled: bool) -> Result<(), String> {
+    let mut prefs = settings::load();
+    prefs.blocklist_enabled = enabled;
+    settings::save(&prefs)
+}
+
+#[tauri::command]
 pub async fn update_lists() -> Result<ListsStatus, String> {
+    if !settings::load().blocklist_enabled {
+        return Err("Blocklist checks are turned off.".into());
+    }
     tauri::async_runtime::spawn_blocking(lists::update_all)
         .await
         .map_err(|e| e.to_string())??;

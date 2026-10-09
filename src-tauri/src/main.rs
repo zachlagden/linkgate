@@ -15,8 +15,10 @@ use commands::AppState;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--update-lists") {
-        if let Err(error) = lists::update_all() {
-            logging::error("list_update_failed", error);
+        if settings::load().blocklist_enabled {
+            if let Err(error) = lists::update_all() {
+                logging::error("list_update_failed", error);
+            }
         }
         return;
     }
@@ -26,12 +28,14 @@ fn main() {
 
 fn run(raw: Option<String>) {
     let link = raw.as_deref().and_then(link::parse);
+    let blocklist_enabled = settings::load().blocklist_enabled;
     let hits = link
         .as_ref()
         .and_then(|l| l.host.as_deref())
+        .filter(|_| blocklist_enabled)
         .map(lists::lookup)
         .unwrap_or_default();
-    if lists::is_stale() && !lists::is_updating() {
+    if blocklist_enabled && lists::is_stale() && !lists::is_updating() {
         lists::spawn_background_update();
     }
     let state = AppState {
@@ -56,6 +60,7 @@ fn run(raw: Option<String>) {
             commands::copy_link,
             commands::dismiss,
             commands::set_browser_hidden,
+            commands::set_blocklist_enabled,
             commands::update_lists,
             commands::lists_status,
         ])

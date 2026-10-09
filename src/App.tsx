@@ -15,6 +15,7 @@ export function App(): ReactElement {
   const [state, setState] = useState<InitialState | null>(null);
   const [browsers, setBrowsers] = useState<BrowserView[]>([]);
   const [lists, setLists] = useState<ListsStatus | null>(null);
+  const [blocklistEnabled, setBlocklistEnabled] = useState(true);
   const [view, setView] = useState<View>("picker");
   const [countdownKey, setCountdownKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -26,6 +27,7 @@ export function App(): ReactElement {
         setState(initial);
         setBrowsers(initial.browsers);
         setLists(initial.lists);
+        setBlocklistEnabled(initial.blocklistEnabled);
         if (!initial.raw) setView("settings");
       },
       (failure) => setLoadError(errorMessage(failure)),
@@ -48,6 +50,10 @@ export function App(): ReactElement {
   }, []);
 
   const hasLink = Boolean(state?.raw);
+  const pickerState = useMemo(
+    () => (state && !blocklistEnabled ? { ...state, hits: [] } : state),
+    [state, blocklistEnabled],
+  );
   const visibleBrowsers = useMemo(() => browsers.filter((browser) => !browser.hidden), [browsers]);
   const restartCountdown = useCallback(() => setCountdownKey((key) => key + 1), []);
   const dismiss = useCallback(() => void api.dismiss(), []);
@@ -87,10 +93,10 @@ export function App(): ReactElement {
       />
       <main className="min-h-0 overflow-y-auto">
         {loadError && <p className="px-5 py-6 text-[13px] text-danger">{loadError}</p>}
-        {state && lists && inPicker && (
+        {state && pickerState && lists && inPicker && (
           <Picker
             key="picker"
-            state={state}
+            state={pickerState}
             browsers={visibleBrowsers}
             onSettings={() => setView("settings")}
             onRestartCountdown={restartCountdown}
@@ -100,9 +106,11 @@ export function App(): ReactElement {
           <Settings
             browsers={browsers}
             lists={lists}
+            blocklistEnabled={blocklistEnabled}
             version={state.version}
             onBrowsersChange={setBrowsers}
             onListsChange={setLists}
+            onBlocklistEnabledChange={setBlocklistEnabled}
           />
         )}
       </main>

@@ -7,9 +7,11 @@ import { Toggle } from "./Toggle";
 interface SettingsProps {
   browsers: BrowserView[];
   lists: ListsStatus;
+  blocklistEnabled: boolean;
   version: string;
   onBrowsersChange: (browsers: BrowserView[]) => void;
   onListsChange: (lists: ListsStatus) => void;
+  onBlocklistEnabledChange: (enabled: boolean) => void;
 }
 
 function Section({ title, note, children }: { title: string; note: string; children: ReactNode }): ReactElement {
@@ -22,19 +24,28 @@ function Section({ title, note, children }: { title: string; note: string; child
   );
 }
 
-export function Settings({ browsers, lists, version, onBrowsersChange, onListsChange }: SettingsProps): ReactElement {
+export function Settings({
+  browsers,
+  lists,
+  blocklistEnabled,
+  version,
+  onBrowsersChange,
+  onListsChange,
+  onBlocklistEnabledChange,
+}: SettingsProps): ReactElement {
   const [saving, setSaving] = useState<string | null>(null);
+  const [savingBlocklist, setSavingBlocklist] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const updating = checking || lists.updating;
 
   useEffect(() => {
-    if (!lists.updating || checking) return;
+    if (!blocklistEnabled || !lists.updating || checking) return;
     const timer = window.setInterval(() => {
       api.listsStatus().then(onListsChange, () => undefined);
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [lists.updating, checking, onListsChange]);
+  }, [blocklistEnabled, lists.updating, checking, onListsChange]);
 
   const toggle = async (browser: BrowserView, visible: boolean): Promise<void> => {
     setSaving(browser.id);
@@ -45,6 +56,19 @@ export function Settings({ browsers, lists, version, onBrowsersChange, onListsCh
       setError(errorMessage(failure));
     } finally {
       setSaving(null);
+    }
+  };
+
+  const toggleBlocklist = async (enabled: boolean): Promise<void> => {
+    setSavingBlocklist(true);
+    setError(null);
+    try {
+      await api.setBlocklistEnabled(enabled);
+      onBlocklistEnabledChange(enabled);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setSavingBlocklist(false);
     }
   };
 
@@ -93,11 +117,20 @@ export function Settings({ browsers, lists, version, onBrowsersChange, onListsCh
         title="Blocklists"
         note="From Pi-hole Optimized Blocklists. A match never blocks a link, it adds a confirmation step."
       >
-        {lists.lists.map((list, index) => (
-          <div
-            key={list.name}
-            className={`flex items-baseline justify-between gap-3 px-3 py-2.5 ${index > 0 ? "border-t border-line" : ""}`}
-          >
+        <label className="flex items-center gap-3 px-3 py-2.5">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13.5px] font-medium text-ink">Check links against the blocklists</span>
+            <span className="block text-[12px] text-ink-3">Looks up each link's domain in lists stored on this PC.</span>
+          </span>
+          <Toggle
+            checked={blocklistEnabled}
+            label="Check links against the blocklists"
+            disabled={savingBlocklist}
+            onChange={(enabled) => void toggleBlocklist(enabled)}
+          />
+        </label>
+        {lists.lists.map((list) => (
+          <div key={list.name} className="flex items-baseline justify-between gap-3 border-t border-line px-3 py-2.5">
             <span className="text-[13.5px] font-medium text-ink">{capitalise(list.name)}</span>
             <span className="text-[12.5px] text-ink-3 tabular-nums">
               {list.count ? `${formatCount(list.count)} domains` : "Not downloaded yet"}
@@ -106,11 +139,15 @@ export function Settings({ browsers, lists, version, onBrowsersChange, onListsCh
         ))}
         <div className="flex items-center justify-between gap-3 border-t border-line px-3 py-2">
           <span className="text-[12.5px] text-ink-3">
-            {updating ? "Downloading lists…" : `Checked ${relativeTime(lists.checkedAt)}`}
+            {!blocklistEnabled
+              ? "Turned off"
+              : updating
+                ? "Downloading lists…"
+                : `Checked ${relativeTime(lists.checkedAt)}`}
           </span>
           <button
             type="button"
-            disabled={updating}
+            disabled={updating || !blocklistEnabled}
             onClick={() => void checkNow()}
             className="h-7 rounded-md border border-line px-2.5 text-[12.5px] font-medium text-ink-2 outline-none transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-accent active:bg-press disabled:opacity-50"
           >

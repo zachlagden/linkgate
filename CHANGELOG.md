@@ -4,6 +4,7 @@
 
 ### Added
 
+- A settings switch that turns the blocklist check off. With it off, linkgate looks up no links, downloads no lists and shows no list warning.
 - Project documentation for open source use: contributing guide, security policy, issue and pull request templates, CI and Dependabot configuration.
 - MIT licence and package metadata.
 - Screenshot, troubleshooting, uninstall and file locations in the README.
