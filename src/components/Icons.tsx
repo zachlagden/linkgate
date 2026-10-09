@@ -87,3 +87,16 @@ export function Mark(props: IconProps): ReactElement {
     </svg>
   );
 }
+
+export function GripIcon(props: IconProps): ReactElement {
+  return (
+    <Base fill="currentColor" stroke="none" {...props}>
+      <circle cx="6" cy="4" r="1.1" />
+      <circle cx="10" cy="4" r="1.1" />
+      <circle cx="6" cy="8" r="1.1" />
+      <circle cx="10" cy="8" r="1.1" />
+      <circle cx="6" cy="12" r="1.1" />
+      <circle cx="10" cy="12" r="1.1" />
+    </Base>
+  );
+}

@@ -9,6 +9,7 @@ mod lists;
 mod lock;
 mod logging;
 mod net;
+mod order;
 mod paths;
 mod placement;
 mod settings;
@@ -76,6 +77,7 @@ fn run(raw: Option<String>) {
             commands::copy_link,
             commands::dismiss,
             commands::set_browser_hidden,
+            commands::set_browser_order,
             commands::set_blocklist_enabled,
             commands::set_update_check_enabled,
             commands::run_update,

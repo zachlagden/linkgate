@@ -9,6 +9,8 @@ pub struct Settings {
     pub hidden: Vec<String>,
     #[serde(default)]
     pub seen: Vec<String>,
+    #[serde(default)]
+    pub order: Vec<String>,
     #[serde(default = "enabled_by_default")]
     pub blocklist_enabled: bool,
     #[serde(default = "enabled_by_default")]
@@ -24,6 +26,7 @@ impl Default for Settings {
         Self {
             hidden: Vec::new(),
             seen: Vec::new(),
+            order: Vec::new(),
             blocklist_enabled: true,
             update_check_enabled: true,
         }
@@ -91,6 +94,23 @@ mod tests {
         let loaded: Settings = serde_json::from_str(&json).unwrap();
         assert!(!loaded.update_check_enabled);
         assert!(loaded.blocklist_enabled);
+    }
+
+    #[test]
+    fn order_is_empty_when_the_field_is_missing() {
+        let settings: Settings = serde_json::from_str(r#"{"hidden":[],"seen":[]}"#).unwrap();
+        assert!(settings.order.is_empty());
+    }
+
+    #[test]
+    fn order_survives_a_round_trip() {
+        let settings = Settings {
+            order: vec!["firefox".into(), "chrome".into()],
+            ..Settings::default()
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let loaded: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.order, vec!["firefox".to_string(), "chrome".to_string()]);
     }
 
     #[test]

@@ -5,7 +5,7 @@ use crate::browsers::{self, Browser, BrowserView};
 use crate::link::{LinkView, ParsedLink};
 use crate::lists::{self, ListHit, ListsStatus};
 use crate::updates::{self, UpdateStatus};
-use crate::{logging, placement, settings};
+use crate::{logging, order, placement, settings};
 
 pub struct AppState {
     pub link: Option<ParsedLink>,
@@ -31,6 +31,7 @@ pub struct InitialState {
 fn refresh_browsers(state: &AppState) -> Vec<BrowserView> {
     let detected = browsers::detect();
     let prefs = browsers::apply_first_seen_defaults(&detected);
+    let detected = order::arrange(detected, |b| b.id.as_str(), &prefs.order);
     let views = browsers::views(&detected, &prefs);
     if let Ok(mut cache) = state.browsers.lock() {
         *cache = detected;
@@ -116,6 +117,22 @@ pub async fn set_browser_hidden(
     if hidden {
         prefs.hidden.push(id);
     }
+    settings::save(&prefs)?;
+    Ok(refresh_browsers(&state))
+}
+
+#[tauri::command]
+pub async fn set_browser_order(state: State<'_, AppState>, ids: Vec<String>) -> Result<Vec<BrowserView>, String> {
+    let installed: Vec<String> = state
+        .browsers
+        .lock()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .map(|b| b.id.clone())
+        .collect();
+    let requested: Vec<String> = ids.into_iter().filter(|id| installed.contains(id)).collect();
+    let mut prefs = settings::load();
+    prefs.order = order::merge_saved(&prefs.order, &requested);
     settings::save(&prefs)?;
     Ok(refresh_browsers(&state))
 }
