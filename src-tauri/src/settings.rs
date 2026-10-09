@@ -37,10 +37,16 @@ fn path() -> std::path::PathBuf {
     paths::config_dir().join("settings.json")
 }
 
+const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
+
+fn parse(bytes: &[u8]) -> Option<Settings> {
+    serde_json::from_slice(bytes.strip_prefix(UTF8_BOM).unwrap_or(bytes)).ok()
+}
+
 pub fn load() -> Settings {
     std::fs::read(path())
         .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .and_then(|bytes| parse(&bytes))
         .unwrap_or_default()
 }
 
@@ -111,6 +117,15 @@ mod tests {
         let json = serde_json::to_string(&settings).unwrap();
         let loaded: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.order, vec!["firefox".to_string(), "chrome".to_string()]);
+    }
+
+    #[test]
+    fn a_file_with_a_byte_order_mark_still_loads() {
+        let mut bytes = UTF8_BOM.to_vec();
+        bytes.extend_from_slice(br#"{"order":["firefox"],"blocklistEnabled":false}"#);
+        let settings = parse(&bytes).unwrap();
+        assert_eq!(settings.order, vec!["firefox".to_string()]);
+        assert!(!settings.blocklist_enabled);
     }
 
     #[test]
