@@ -4,6 +4,9 @@
 
 ### Added
 
+- Project documentation for open source use: contributing guide, security policy, issue and pull request templates, CI and Dependabot configuration.
+- MIT licence and package metadata.
+- Screenshot, troubleshooting, uninstall and file locations in the README.
 - `xdg-open` on a PDF, PNG, JPEG, GIF, WebP or SVG file shows the picker, with the WSL path converted to its Windows `file:` link.
 - Network file links open in Firefox, which needs five slashes for `wsl.localhost` paths.
 - `linkgate-open` accepts `file://` links to WSL paths and percent-encodes special characters in converted paths.
