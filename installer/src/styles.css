@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+:root {
+  color-scheme: light;
+  --bg: oklch(0.982 0.005 95);
+  --chrome: oklch(0.955 0.008 95);
+  --well: oklch(0.962 0.007 95);
+  --hover: oklch(0.935 0.009 95);
+  --press: oklch(0.91 0.01 95);
+  --line: oklch(0.9 0.01 95);
+  --ink: oklch(0.2 0.004 95);
+  --ink-2: oklch(0.46 0.008 95);
+  --ink-3: oklch(0.6 0.009 95);
+  --accent: oklch(0.67 0.131 38.8);
+  --accent-ink: oklch(0.55 0.14 38.8);
+  --danger: oklch(0.53 0.17 27);
+  --danger-soft: oklch(0.95 0.025 27);
+  --danger-line: oklch(0.86 0.06 27);
+  --warn: oklch(0.58 0.12 65);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: oklch(0.268 0.004 95);
+    --chrome: oklch(0.228 0.004 95);
+    --well: oklch(0.235 0.004 95);
+    --hover: oklch(0.315 0.005 95);
+    --press: oklch(0.35 0.005 95);
+    --line: oklch(0.36 0.006 95);
+    --ink: oklch(0.965 0.006 95);
+    --ink-2: oklch(0.8 0.012 95);
+    --ink-3: oklch(0.66 0.01 95);
+    --accent: oklch(0.69 0.13 38.8);
+    --accent-ink: oklch(0.74 0.12 38.8);
+    --danger: oklch(0.72 0.14 25);
+    --danger-soft: oklch(0.3 0.04 25);
+    --danger-line: oklch(0.42 0.08 25);
+    --warn: oklch(0.78 0.12 75);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-chrome: var(--chrome);
+  --color-well: var(--well);
+  --color-hover: var(--hover);
+  --color-press: var(--press);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-warn: var(--warn);
+  --font-sans: "Inter Variable", "Segoe UI Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace;
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+button {
+  cursor: default;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--accent) 30%, transparent);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-enter {
+  animation: enter 180ms var(--ease-out-quart) both;
+}
+
+.animate-spin-slow {
+  animation: spin 900ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-enter {
+    animation: none;
+  }
+  .animate-spin-slow {
+    animation-duration: 2400ms;
+  }
+}
