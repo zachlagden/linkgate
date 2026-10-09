@@ -2,6 +2,15 @@
   "name": "linkgate",
   "private": true,
   "version": "0.1.0",
+  "description": "Browser picker for links opened from WSL, with link anatomy and blocklist checks",
+  "license": "MIT",
+  "author": "Zach Lagden",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zachlagden/linkgate.git"
+  },
+  "homepage": "https://github.com/zachlagden/linkgate",
+  "bugs": "https://github.com/zachlagden/linkgate/issues",
   "type": "module",
   "scripts": {
     "dev": "vite",

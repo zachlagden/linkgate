@@ -2,6 +2,11 @@
 name = "linkgate"
 version = "0.1.0"
 edition = "2021"
+description = "Browser picker for links opened from WSL, with link anatomy and blocklist checks"
+license = "MIT"
+authors = ["Zach Lagden"]
+repository = "https://github.com/zachlagden/linkgate"
+readme = "../README.md"
 rust-version = "1.85"
 publish = false
 
