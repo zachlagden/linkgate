@@ -6,7 +6,7 @@ import { Picker } from "./components/Picker";
 import { Settings } from "./components/Settings";
 import { TitleBar } from "./components/TitleBar";
 
-const COUNTDOWN_MS = 10_000;
+const DEFAULT_TIMEOUT_SECONDS = 10;
 
 type View = "picker" | "settings";
 
@@ -18,6 +18,8 @@ export function App(): ReactElement {
   const [blocklistEnabled, setBlocklistEnabled] = useState(true);
   const [update, setUpdate] = useState<UpdateStatus>({ available: null, checkedAt: 0 });
   const [updateCheckEnabled, setUpdateCheckEnabled] = useState(true);
+  const [autoCloseEnabled, setAutoCloseEnabled] = useState(true);
+  const [timeoutSeconds, setTimeoutSeconds] = useState(DEFAULT_TIMEOUT_SECONDS);
   const [view, setView] = useState<View>("picker");
   const [countdownKey, setCountdownKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -32,6 +34,8 @@ export function App(): ReactElement {
         setBlocklistEnabled(initial.blocklistEnabled);
         setUpdate(initial.update);
         setUpdateCheckEnabled(initial.updateCheckEnabled);
+        setAutoCloseEnabled(initial.autoCloseEnabled);
+        setTimeoutSeconds(initial.timeoutSeconds);
         if (!initial.raw) setView("settings");
       },
       (failure) => setLoadError(errorMessage(failure)),
@@ -79,6 +83,13 @@ export function App(): ReactElement {
   }, [view, hasLink, backToPicker, dismiss]);
 
   const inPicker = view === "picker" && hasLink;
+  const runningTimeoutMs = (state?.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS) * 1000;
+  const counting = inPicker && (state?.autoCloseEnabled ?? true);
+
+  const changeAutoClose = useCallback((enabled: boolean, seconds: number) => {
+    setAutoCloseEnabled(enabled);
+    setTimeoutSeconds(seconds);
+  }, []);
 
   return (
     <div ref={rootRef} className="flex max-h-[680px] flex-col">
@@ -90,8 +101,8 @@ export function App(): ReactElement {
       />
       <Countdown
         runKey={countdownKey}
-        durationMs={COUNTDOWN_MS}
-        running={inPicker}
+        durationMs={runningTimeoutMs}
+        running={counting}
         paused={pointerInside}
         onElapsed={dismiss}
       />
@@ -113,11 +124,14 @@ export function App(): ReactElement {
             blocklistEnabled={blocklistEnabled}
             update={update}
             updateCheckEnabled={updateCheckEnabled}
+            autoCloseEnabled={autoCloseEnabled}
+            timeoutSeconds={timeoutSeconds}
             version={state.version}
             onBrowsersChange={setBrowsers}
             onListsChange={setLists}
             onBlocklistEnabledChange={setBlocklistEnabled}
             onUpdateCheckEnabledChange={setUpdateCheckEnabled}
+            onAutoCloseChange={changeAutoClose}
           />
         )}
       </main>

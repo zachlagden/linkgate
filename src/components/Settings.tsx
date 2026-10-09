@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { api, errorMessage, type BrowserView, type ListsStatus, type UpdateStatus } from "../lib/api";
 import { capitalise, formatCount, relativeTime } from "../lib/format";
+import { AutoClose } from "./AutoClose";
 import { BrowserList } from "./BrowserList";
 import { Toggle } from "./Toggle";
 
@@ -10,11 +11,14 @@ interface SettingsProps {
   blocklistEnabled: boolean;
   update: UpdateStatus;
   updateCheckEnabled: boolean;
+  autoCloseEnabled: boolean;
+  timeoutSeconds: number;
   version: string;
   onBrowsersChange: (browsers: BrowserView[]) => void;
   onListsChange: (lists: ListsStatus) => void;
   onBlocklistEnabledChange: (enabled: boolean) => void;
   onUpdateCheckEnabledChange: (enabled: boolean) => void;
+  onAutoCloseChange: (enabled: boolean, seconds: number) => void;
 }
 
 function Section({ title, note, children }: { title: string; note: string; children: ReactNode }): ReactElement {
@@ -33,11 +37,14 @@ export function Settings({
   blocklistEnabled,
   update,
   updateCheckEnabled,
+  autoCloseEnabled,
+  timeoutSeconds,
   version,
   onBrowsersChange,
   onListsChange,
   onBlocklistEnabledChange,
   onUpdateCheckEnabledChange,
+  onAutoCloseChange,
 }: SettingsProps): ReactElement {
   const [saving, setSaving] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
@@ -93,6 +100,17 @@ export function Settings({
       setError(errorMessage(failure));
     } finally {
       setSavingBlocklist(false);
+    }
+  };
+
+  const saveAutoClose = async (enabled: boolean, seconds: number): Promise<boolean> => {
+    setError(null);
+    try {
+      onAutoCloseChange(enabled, await api.setAutoClose(enabled, seconds));
+      return true;
+    } catch (failure) {
+      setError(errorMessage(failure));
+      return false;
     }
   };
 
@@ -186,6 +204,10 @@ export function Settings({
           onToggle={(browser, visible) => void toggle(browser, visible)}
           onReorder={(next) => void reorder(next)}
         />
+      </Section>
+
+      <Section title="Auto-close" note="With no choice in time the window closes and nothing happens.">
+        <AutoClose enabled={autoCloseEnabled} seconds={timeoutSeconds} onSave={saveAutoClose} />
       </Section>
 
       <Section

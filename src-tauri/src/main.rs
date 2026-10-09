@@ -13,6 +13,7 @@ mod order;
 mod paths;
 mod placement;
 mod settings;
+mod timeout;
 mod updates;
 
 use commands::AppState;
@@ -80,6 +81,7 @@ fn run(raw: Option<String>) {
             commands::set_browser_order,
             commands::set_blocklist_enabled,
             commands::set_update_check_enabled,
+            commands::set_auto_close,
             commands::run_update,
             commands::update_lists,
             commands::lists_status,
