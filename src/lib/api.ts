@@ -59,8 +59,13 @@ export interface InitialState {
   blocklistEnabled: boolean;
   update: UpdateStatus;
   updateCheckEnabled: boolean;
+  autoCloseEnabled: boolean;
+  timeoutSeconds: number;
   version: string;
 }
+
+export const TIMEOUT_MIN_SECONDS = 3;
+export const TIMEOUT_MAX_SECONDS = 60;
 
 export const api = {
   initialState: (): Promise<InitialState> => invoke("initial_state"),
@@ -74,6 +79,7 @@ export const api = {
   setBrowserOrder: (ids: string[]): Promise<BrowserView[]> => invoke("set_browser_order", { ids }),
   setBlocklistEnabled: (enabled: boolean): Promise<void> => invoke("set_blocklist_enabled", { enabled }),
   setUpdateCheckEnabled: (enabled: boolean): Promise<void> => invoke("set_update_check_enabled", { enabled }),
+  setAutoClose: (enabled: boolean, seconds: number): Promise<number> => invoke("set_auto_close", { enabled, seconds }),
   runUpdate: (): Promise<void> => invoke("run_update"),
   updateLists: (): Promise<ListsStatus> => invoke("update_lists"),
   listsStatus: (): Promise<ListsStatus> => invoke("lists_status"),

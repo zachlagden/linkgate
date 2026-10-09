@@ -5,7 +5,7 @@ use crate::browsers::{self, Browser, BrowserView};
 use crate::link::{LinkView, ParsedLink};
 use crate::lists::{self, ListHit, ListsStatus};
 use crate::updates::{self, UpdateStatus};
-use crate::{logging, order, placement, settings};
+use crate::{logging, order, placement, settings, timeout};
 
 pub struct AppState {
     pub link: Option<ParsedLink>,
@@ -25,6 +25,8 @@ pub struct InitialState {
     blocklist_enabled: bool,
     update: UpdateStatus,
     update_check_enabled: bool,
+    auto_close_enabled: bool,
+    timeout_seconds: u32,
     version: &'static str,
 }
 
@@ -51,6 +53,8 @@ pub async fn initial_state(state: State<'_, AppState>) -> Result<InitialState, S
         blocklist_enabled: prefs.blocklist_enabled,
         update: updates::status(),
         update_check_enabled: prefs.update_check_enabled,
+        auto_close_enabled: prefs.auto_close_enabled,
+        timeout_seconds: prefs.timeout_seconds,
         version: env!("CARGO_PKG_VERSION"),
     })
 }
@@ -149,6 +153,15 @@ pub fn set_update_check_enabled(enabled: bool) -> Result<(), String> {
     let mut prefs = settings::load();
     prefs.update_check_enabled = enabled;
     settings::save(&prefs)
+}
+
+#[tauri::command]
+pub fn set_auto_close(enabled: bool, seconds: u32) -> Result<u32, String> {
+    let mut prefs = settings::load();
+    prefs.auto_close_enabled = enabled;
+    prefs.timeout_seconds = timeout::clamp(seconds);
+    settings::save(&prefs)?;
+    Ok(prefs.timeout_seconds)
 }
 
 #[tauri::command]
