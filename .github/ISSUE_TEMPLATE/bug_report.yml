@@ -1,0 +1,50 @@
+name: Bug report
+description: Something in linkgate doesn't work as it should
+labels: ["bug"]
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: Describe the bug, including the kind of link or file you opened if it matters. Replace private links with an example.com link.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `xdg-open https://example.com` in WSL
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        - linkgate version: 0.1.0
+        - Windows version: 11 23H2
+        - WSL distro: Ubuntu 24.04
+        - Browser chosen in the picker: Firefox
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The last lines of `%LOCALAPPDATA%\linkgate\linkgate.log`. linkgate never writes links to it.
+      render: json
+    validations:
+      required: false
