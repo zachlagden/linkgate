@@ -1,15 +1,17 @@
 import type { ReactElement } from "react";
 
 interface ToggleProps {
+  id?: string;
   checked: boolean;
   label: string;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
 }
 
-export function Toggle({ checked, label, disabled, onChange }: ToggleProps): ReactElement {
+export function Toggle({ id, checked, label, disabled, onChange }: ToggleProps): ReactElement {
   return (
     <button
+      id={id}
       type="button"
       role="switch"
       aria-checked={checked}

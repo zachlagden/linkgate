@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { api, errorMessage, type BrowserView, type ListsStatus, type UpdateStatus } from "../lib/api";
 import { capitalise, formatCount, relativeTime } from "../lib/format";
-import { GlobeIcon } from "./Icons";
+import { BrowserList } from "./BrowserList";
 import { Toggle } from "./Toggle";
 
 interface SettingsProps {
@@ -40,6 +40,7 @@ export function Settings({
   onUpdateCheckEnabledChange,
 }: SettingsProps): ReactElement {
   const [saving, setSaving] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
   const [savingBlocklist, setSavingBlocklist] = useState(false);
   const [savingUpdateCheck, setSavingUpdateCheck] = useState(false);
   const [startingUpdate, setStartingUpdate] = useState(false);
@@ -64,6 +65,21 @@ export function Settings({
       setError(errorMessage(failure));
     } finally {
       setSaving(null);
+    }
+  };
+
+  const reorder = async (next: BrowserView[]): Promise<void> => {
+    const previous = browsers;
+    setReordering(true);
+    setError(null);
+    onBrowsersChange(next);
+    try {
+      onBrowsersChange(await api.setBrowserOrder(next.map((browser) => browser.id)));
+    } catch (failure) {
+      onBrowsersChange(previous);
+      setError(errorMessage(failure));
+    } finally {
+      setReordering(false);
     }
   };
 
@@ -159,30 +175,17 @@ export function Settings({
   return (
     <div className="animate-enter flex flex-col gap-6 px-4 pt-4 pb-4">
       {updateFirst && updates}
-      <Section title="Browsers" note="Every browser installed on this PC. Hidden ones stay out of the picker.">
-        {browsers.length === 0 && <p className="px-3 py-3 text-[13px] text-ink-2">No browsers found.</p>}
-        {browsers.map((browser, index) => (
-          <label
-            key={browser.id}
-            className={`flex items-center gap-3 px-3 py-2.5 ${index > 0 ? "border-t border-line" : ""}`}
-          >
-            <span className="grid h-5 w-5 shrink-0 place-items-center text-ink-2">
-              {browser.icon ? <img src={browser.icon} alt="" className="h-5 w-5" draggable={false} /> : <GlobeIcon />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13.5px] font-medium text-ink">{browser.name}</span>
-              <span className="block truncate font-mono text-[11px] text-ink-3" title={browser.path}>
-                {browser.path}
-              </span>
-            </span>
-            <Toggle
-              checked={!browser.hidden}
-              label={`Show ${browser.name}`}
-              disabled={saving === browser.id}
-              onChange={(visible) => void toggle(browser, visible)}
-            />
-          </label>
-        ))}
+      <Section
+        title="Browsers"
+        note="Every browser installed on this PC. Drag the handle to change the order and numbers in the picker, or focus it and press Alt with the up or down arrow. Hidden ones stay out of the picker."
+      >
+        <BrowserList
+          browsers={browsers}
+          savingId={saving}
+          locked={reordering}
+          onToggle={(browser, visible) => void toggle(browser, visible)}
+          onReorder={(next) => void reorder(next)}
+        />
       </Section>
 
       <Section

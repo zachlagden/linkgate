@@ -71,6 +71,7 @@ export const api = {
   dismiss: (): Promise<void> => invoke("dismiss"),
   setBrowserHidden: (id: string, hidden: boolean): Promise<BrowserView[]> =>
     invoke("set_browser_hidden", { id, hidden }),
+  setBrowserOrder: (ids: string[]): Promise<BrowserView[]> => invoke("set_browser_order", { ids }),
   setBlocklistEnabled: (enabled: boolean): Promise<void> => invoke("set_blocklist_enabled", { enabled }),
   setUpdateCheckEnabled: (enabled: boolean): Promise<void> => invoke("set_update_check_enabled", { enabled }),
   runUpdate: (): Promise<void> => invoke("run_update"),
