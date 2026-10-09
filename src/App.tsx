@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import { api, errorMessage, type BrowserView, type InitialState, type ListsStatus } from "./lib/api";
+import { api, errorMessage, type BrowserView, type InitialState, type ListsStatus, type UpdateStatus } from "./lib/api";
 import { useWindowSizing } from "./lib/useWindowSizing";
 import { Countdown } from "./components/Countdown";
 import { Picker } from "./components/Picker";
@@ -16,6 +16,8 @@ export function App(): ReactElement {
   const [browsers, setBrowsers] = useState<BrowserView[]>([]);
   const [lists, setLists] = useState<ListsStatus | null>(null);
   const [blocklistEnabled, setBlocklistEnabled] = useState(true);
+  const [update, setUpdate] = useState<UpdateStatus>({ available: null, checkedAt: 0 });
+  const [updateCheckEnabled, setUpdateCheckEnabled] = useState(true);
   const [view, setView] = useState<View>("picker");
   const [countdownKey, setCountdownKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -28,6 +30,8 @@ export function App(): ReactElement {
         setBrowsers(initial.browsers);
         setLists(initial.lists);
         setBlocklistEnabled(initial.blocklistEnabled);
+        setUpdate(initial.update);
+        setUpdateCheckEnabled(initial.updateCheckEnabled);
         if (!initial.raw) setView("settings");
       },
       (failure) => setLoadError(errorMessage(failure)),
@@ -107,10 +111,13 @@ export function App(): ReactElement {
             browsers={browsers}
             lists={lists}
             blocklistEnabled={blocklistEnabled}
+            update={update}
+            updateCheckEnabled={updateCheckEnabled}
             version={state.version}
             onBrowsersChange={setBrowsers}
             onListsChange={setLists}
             onBlocklistEnabledChange={setBlocklistEnabled}
+            onUpdateCheckEnabledChange={setUpdateCheckEnabled}
           />
         )}
       </main>

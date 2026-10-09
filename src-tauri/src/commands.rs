@@ -4,6 +4,7 @@ use tauri::{AppHandle, State, WebviewWindow};
 use crate::browsers::{self, Browser, BrowserView};
 use crate::link::{LinkView, ParsedLink};
 use crate::lists::{self, ListHit, ListsStatus};
+use crate::updates::{self, UpdateStatus};
 use crate::{logging, placement, settings};
 
 pub struct AppState {
@@ -22,6 +23,8 @@ pub struct InitialState {
     browsers: Vec<BrowserView>,
     lists: ListsStatus,
     blocklist_enabled: bool,
+    update: UpdateStatus,
+    update_check_enabled: bool,
     version: &'static str,
 }
 
@@ -37,13 +40,16 @@ fn refresh_browsers(state: &AppState) -> Vec<BrowserView> {
 
 #[tauri::command]
 pub async fn initial_state(state: State<'_, AppState>) -> Result<InitialState, String> {
+    let prefs = settings::load();
     Ok(InitialState {
         link: state.link.as_ref().map(|l| l.view.clone()),
         raw: state.raw.clone(),
         hits: state.hits.clone(),
         browsers: refresh_browsers(&state),
         lists: lists::status(),
-        blocklist_enabled: settings::load().blocklist_enabled,
+        blocklist_enabled: prefs.blocklist_enabled,
+        update: updates::status(),
+        update_check_enabled: prefs.update_check_enabled,
         version: env!("CARGO_PKG_VERSION"),
     })
 }
@@ -119,6 +125,20 @@ pub fn set_blocklist_enabled(enabled: bool) -> Result<(), String> {
     let mut prefs = settings::load();
     prefs.blocklist_enabled = enabled;
     settings::save(&prefs)
+}
+
+#[tauri::command]
+pub fn set_update_check_enabled(enabled: bool) -> Result<(), String> {
+    let mut prefs = settings::load();
+    prefs.update_check_enabled = enabled;
+    settings::save(&prefs)
+}
+
+#[tauri::command]
+pub fn run_update(app: AppHandle) -> Result<(), String> {
+    updates::launch_installer()?;
+    app.exit(0);
+    Ok(())
 }
 
 #[tauri::command]

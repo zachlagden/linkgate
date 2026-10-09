@@ -2,18 +2,18 @@ mod index;
 
 use std::collections::BTreeMap;
 use std::io::Read;
-use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{logging, paths};
+use crate::{lock, logging, net, paths};
 
 const SOURCE_BASE: &str =
     "https://media.githubusercontent.com/media/zachlagden/Pi-hole-Optimized-Blocklists/main/lists";
 pub const LIST_NAMES: [&str; 3] = ["malicious", "suspicious", "tracking"];
 const CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const LOCK_STALE_SECS: u64 = 60 * 60;
+const UPDATE_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -77,13 +77,8 @@ fn write_meta(meta: &Meta) -> std::io::Result<()> {
     std::fs::rename(tmp, meta_path())
 }
 
-fn lock_age() -> Option<u64> {
-    let modified = std::fs::metadata(lock_path()).ok()?.modified().ok()?;
-    Some(modified.elapsed().map(|d| d.as_secs()).unwrap_or(0))
-}
-
 pub fn is_updating() -> bool {
-    lock_age().is_some_and(|age| age < LOCK_STALE_SECS)
+    lock::is_held(&lock_path(), LOCK_STALE_SECS)
 }
 
 pub fn is_stale() -> bool {
@@ -155,32 +150,12 @@ pub fn lookup(host: &str) -> Vec<ListHit> {
     hits
 }
 
-struct LockGuard;
-
-impl Drop for LockGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(lock_path());
-    }
-}
-
-fn acquire_lock() -> Option<LockGuard> {
-    if lock_age().is_some_and(|age| age >= LOCK_STALE_SECS) {
-        let _ = std::fs::remove_file(lock_path());
-    }
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(lock_path())
-        .ok()
-        .map(|_| LockGuard)
-}
-
 pub fn update_all() -> Result<(), String> {
     std::fs::create_dir_all(paths::lists_dir()).map_err(|e| e.to_string())?;
-    let Some(_lock) = acquire_lock() else {
+    let Some(_lock) = lock::acquire(&lock_path(), LOCK_STALE_SECS) else {
         return Err("An update is already running.".into());
     };
-    let agent = build_agent()?;
+    let agent = net::agent(UPDATE_TIMEOUT)?;
     let mut meta = read_meta();
     let mut failure = None;
     for list in LIST_NAMES {
@@ -204,16 +179,6 @@ pub fn update_all() -> Result<(), String> {
     write_meta(&meta).map_err(|e| e.to_string())?;
     cleanup_orphans(&meta);
     failure.map_or(Ok(()), Err)
-}
-
-fn build_agent() -> Result<ureq::Agent, String> {
-    let tls = native_tls::TlsConnector::new().map_err(|e| e.to_string())?;
-    Ok(ureq::AgentBuilder::new()
-        .tls_connector(Arc::new(tls))
-        .timeout_connect(Duration::from_secs(15))
-        .timeout(Duration::from_secs(600))
-        .user_agent(concat!("linkgate/", env!("CARGO_PKG_VERSION")))
-        .build())
 }
 
 fn update_list(agent: &ureq::Agent, list: &str, previous: &ListMeta) -> Result<Option<ListMeta>, String> {
@@ -261,22 +226,6 @@ fn cleanup_orphans(meta: &Meta) {
         if name.ends_with(".idx") && !current.contains(&name.as_str()) {
             let _ = std::fs::remove_file(entry.path());
         }
-    }
-}
-
-pub fn spawn_background_update() {
-    use std::os::windows::process::CommandExt;
-    const DETACHED_PROCESS: u32 = 0x0000_0008;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let Ok(exe) = std::env::current_exe() else {
-        return;
-    };
-    if let Err(error) = std::process::Command::new(exe)
-        .arg("--update-lists")
-        .creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW)
-        .spawn()
-    {
-        logging::error("list_update_spawn_failed", error);
     }
 }
 

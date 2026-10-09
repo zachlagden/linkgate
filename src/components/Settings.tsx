@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
-import { api, errorMessage, type BrowserView, type ListsStatus } from "../lib/api";
+import { api, errorMessage, type BrowserView, type ListsStatus, type UpdateStatus } from "../lib/api";
 import { capitalise, formatCount, relativeTime } from "../lib/format";
 import { GlobeIcon } from "./Icons";
 import { Toggle } from "./Toggle";
@@ -8,10 +8,13 @@ interface SettingsProps {
   browsers: BrowserView[];
   lists: ListsStatus;
   blocklistEnabled: boolean;
+  update: UpdateStatus;
+  updateCheckEnabled: boolean;
   version: string;
   onBrowsersChange: (browsers: BrowserView[]) => void;
   onListsChange: (lists: ListsStatus) => void;
   onBlocklistEnabledChange: (enabled: boolean) => void;
+  onUpdateCheckEnabledChange: (enabled: boolean) => void;
 }
 
 function Section({ title, note, children }: { title: string; note: string; children: ReactNode }): ReactElement {
@@ -28,13 +31,18 @@ export function Settings({
   browsers,
   lists,
   blocklistEnabled,
+  update,
+  updateCheckEnabled,
   version,
   onBrowsersChange,
   onListsChange,
   onBlocklistEnabledChange,
+  onUpdateCheckEnabledChange,
 }: SettingsProps): ReactElement {
   const [saving, setSaving] = useState<string | null>(null);
   const [savingBlocklist, setSavingBlocklist] = useState(false);
+  const [savingUpdateCheck, setSavingUpdateCheck] = useState(false);
+  const [startingUpdate, setStartingUpdate] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const updating = checking || lists.updating;
@@ -72,6 +80,30 @@ export function Settings({
     }
   };
 
+  const toggleUpdateCheck = async (enabled: boolean): Promise<void> => {
+    setSavingUpdateCheck(true);
+    setError(null);
+    try {
+      await api.setUpdateCheckEnabled(enabled);
+      onUpdateCheckEnabledChange(enabled);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setSavingUpdateCheck(false);
+    }
+  };
+
+  const startUpdate = async (): Promise<void> => {
+    setStartingUpdate(true);
+    setError(null);
+    try {
+      await api.runUpdate();
+    } catch (failure) {
+      setError(errorMessage(failure));
+      setStartingUpdate(false);
+    }
+  };
+
   const checkNow = async (): Promise<void> => {
     setChecking(true);
     setError(null);
@@ -85,8 +117,48 @@ export function Settings({
     }
   };
 
+  const updates = (
+    <Section title="Updates" note="New versions are published as releases on GitHub.">
+      <label className="flex items-center gap-3 px-3 py-2.5">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13.5px] font-medium text-ink">Check for updates</span>
+          <span className="block text-[12px] text-ink-3">Asks GitHub for the latest release once a day.</span>
+        </span>
+        <Toggle
+          checked={updateCheckEnabled}
+          label="Check for updates"
+          disabled={savingUpdateCheck}
+          onChange={(enabled) => void toggleUpdateCheck(enabled)}
+        />
+      </label>
+      {updateCheckEnabled && update.available && (
+        <div className="flex items-center justify-between gap-3 border-t border-line px-3 py-2.5">
+          <span className="min-w-0">
+            <span className="block text-[13.5px] font-medium text-ink">Update available</span>
+            <span className="block text-[12px] text-ink-3 tabular-nums">Version {update.available}</span>
+          </span>
+          <button
+            type="button"
+            disabled={startingUpdate}
+            onClick={() => void startUpdate()}
+            className="h-7 rounded-md border border-line px-2.5 text-[12.5px] font-medium text-ink-2 outline-none transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-accent active:bg-press disabled:opacity-50"
+          >
+            {startingUpdate ? "Starting…" : "Update"}
+          </button>
+        </div>
+      )}
+      <div className="border-t border-line px-3 py-2">
+        <span className="text-[12.5px] text-ink-3">
+          {updateCheckEnabled ? `Checked ${relativeTime(update.checkedAt)}` : "Turned off"}
+        </span>
+      </div>
+    </Section>
+  );
+  const updateFirst = updateCheckEnabled && update.available !== null;
+
   return (
     <div className="animate-enter flex flex-col gap-6 px-4 pt-4 pb-4">
+      {updateFirst && updates}
       <Section title="Browsers" note="Every browser installed on this PC. Hidden ones stay out of the picker.">
         {browsers.length === 0 && <p className="px-3 py-3 text-[13px] text-ink-2">No browsers found.</p>}
         {browsers.map((browser, index) => (
@@ -155,6 +227,8 @@ export function Settings({
           </button>
         </div>
       </Section>
+
+      {!updateFirst && updates}
 
       {(error ?? lists.lastError) && (
         <p role="alert" className="px-1 text-[12.5px] text-danger">
