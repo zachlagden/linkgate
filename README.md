@@ -28,7 +28,7 @@
 
 ## What is linkgate?
 
-When a program in WSL runs `xdg-open https://...`, it normally opens a browser without asking. linkgate sits in that path. A small window appears in the middle of the monitor your mouse is on, shows the link broken into its parts, and offers every Windows browser you have installed plus "Copy link". Pressing a button runs that action and closes the window. After 10 seconds with no choice, the window closes and nothing happens.
+When a program in WSL runs `xdg-open https://...`, it normally opens a browser without asking. linkgate sits in that path. A small window appears in the middle of the monitor your mouse is on, shows the link broken into its parts, and offers every Windows browser you have installed plus "Copy link". Pressing a button runs that action and closes the window. After 10 seconds with no choice, the window closes and nothing happens. You can change that time in settings, or turn the timeout off.
 
 It also opens PDFs and images from WSL. `xdg-open ~/report.pdf` turns the Linux path into the Windows one (`file://wsl.localhost/Ubuntu/home/...`) and passes it to the browser you pick.
 
@@ -45,6 +45,7 @@ It is a Tauri 2 app. The Rust side handles parsing, blocklist lookups, browser d
 | Warnings | Flags plain `http`, text before an `@` (which is not the site), punycode domains that imitate other letters, raw IP addresses and unusual ports. |
 | Blocklist check | Checks the domain and its parent domains against the malicious, suspicious and tracking lists from [Pi-hole Optimized Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists). A match adds a confirmation step and never blocks the link. A switch in settings turns the check off. |
 | Files from WSL | Converts WSL paths and `file://` links to Windows links for PDF, PNG, JPEG, GIF, WebP and SVG files. |
+| Timeout | The window closes by itself after 3 to 60 seconds, 10 by default, or stays open until you choose if you set it to never. A bar under the title shows the time left. |
 | Keyboard first | `1` to `9` open in a browser in the order you set, `C` copies the link, `Esc` closes. |
 | Private | Links are never logged. linkgate makes two kinds of network request, the blocklist download and a once-a-day check for a new release. Each has a switch in settings. |
 
@@ -130,11 +131,15 @@ Replace `<you>` with your Windows user name, and use double backslashes because 
 | `Esc` | Close, or go back from a confirmation or settings |
 | `Enter` | Confirm, on the blocklist confirmation |
 
-Run `linkgate.exe` with no link, or click the gear in the title bar, to open settings. There you choose which browsers appear, turn the blocklist check and the update check on or off, check the blocklists by hand, and start an update when one is available.
+Run `linkgate.exe` with no link, or click the gear in the title bar, to open settings. There you choose which browsers appear, set how long the window waits, turn the blocklist check and the update check on or off, check the blocklists by hand, and start an update when one is available.
 
 ### Browser order
 
 The browsers in settings are listed in the order the picker shows them, and the numbers `1` to `9` follow that order. Drag a row by its handle to move it, or focus the handle with the keyboard and press `Alt+Up` or `Alt+Down`. Press `Esc` during a drag to cancel it. Hidden browsers keep their place in the list but take no number. A browser you haven't placed yet, such as one you install later, goes at the end of the list.
+
+### Timeout
+
+The bar under the title bar counts down the time you have to choose. It pauses while the mouse is over the window, and it starts again from the full time when you return from settings or when a blocklist confirmation appears. In settings, "Close automatically after" sets the time from 3 to 60 seconds. Turn on "Never" to remove the timeout, so the window stays until you choose an action or press `Esc`. A new value applies from the next link you open.
 
 ### Warnings
 
@@ -187,7 +192,7 @@ Turn off "Check for updates" in settings and linkgate makes no release check. Wi
 | Path | Contents |
 | --- | --- |
 | `%LOCALAPPDATA%\Programs\linkgate\linkgate.exe` | The app |
-| `%APPDATA%\linkgate\settings.json` | Hidden browsers and the blocklist and update switches |
+| `%APPDATA%\linkgate\settings.json` | Hidden browsers, their order, the timeout and the blocklist and update switches |
 | `%LOCALAPPDATA%\linkgate\lists\` | Blocklists and their index |
 | `%LOCALAPPDATA%\linkgate\icons\` | Cached browser icons |
 | `%LOCALAPPDATA%\linkgate\update.json` | The latest release found by the last update check |

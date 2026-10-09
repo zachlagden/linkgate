@@ -4,6 +4,7 @@
 
 ### Added
 
+- A setting for how long the window waits before closing, from 3 to 60 seconds, or never. The default stays at 10 seconds.
 - Drag the browsers in settings into the order you want. The picker and the `1` to `9` keys follow that order, and `Alt+Up` and `Alt+Down` on a handle move a browser from the keyboard.
 - A once-a-day check for a newer release, shown in settings as "Update available" with an Update button that runs the installer. A settings switch turns the check off.
 - A settings switch that turns the blocklist check off. With it off, linkgate looks up no links, downloads no lists and shows no list warning.
