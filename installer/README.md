@@ -39,7 +39,7 @@ pnpm build:setup
 pnpm test:setup
 ```
 
-`build:setup` cross-compiles with `cargo-xwin` to `installer/src-tauri/target/x86_64-pc-windows-msvc/release/linkgate-setup.exe`. `test:setup` builds the Rust tests for Windows and runs them through interop. On a Windows runner, the same result comes from `pnpm build` in `installer/`, then `cargo build --release` and `cargo test` in `installer/src-tauri/`.
+`build:setup` cross-compiles with `cargo-xwin` to `installer/src-tauri/target/x86_64-pc-windows-msvc/release/linkgate-setup.exe`. `test:setup` builds the Rust tests for Windows and runs them through interop. On a Windows runner, `pnpm --filter linkgate-setup exec tauri build --no-bundle` builds the frontend and the exe at `installer/src-tauri/target/release/linkgate-setup.exe`. Use the Tauri CLI there, because a plain `cargo build` produces an exe that looks for the dev server. `cargo test` in `installer/src-tauri/` runs the tests once `pnpm --filter linkgate-setup build` has created `installer/dist`.
 
 One test runs the generated shell script in a real WSL distribution and is ignored by default:
 
