@@ -4,6 +4,7 @@
 
 ### Added
 
+- A once-a-day check for a newer release, shown in settings as "Update available" with an Update button that runs the installer. A settings switch turns the check off.
 - A settings switch that turns the blocklist check off. With it off, linkgate looks up no links, downloads no lists and shows no list warning.
 - Project documentation for open source use: contributing guide, security policy, issue and pull request templates, CI and Dependabot configuration.
 - MIT licence and package metadata.
