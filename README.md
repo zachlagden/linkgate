@@ -40,12 +40,12 @@ It is a Tauri 2 app. The Rust side handles parsing, blocklist lookups, browser d
 
 | Feature | Description |
 | --- | --- |
-| Browser choice | Lists every browser registered under `StartMenuInternet` in the Windows registry, with its icon, and marks your default. Hide the ones you don't want in settings. |
+| Browser choice | Lists every browser registered under `StartMenuInternet` in the Windows registry, with its icon, and marks your default. Hide the ones you don't want and drag the rest into the order you like in settings. |
 | Link anatomy | Shows the registrable domain large and the subdomain dimmed, so `paypal.com.account-check.io` reads as `account-check.io`. The full link is coloured by part: scheme, subdomain, domain, port, path, query keys, query values and fragment. |
 | Warnings | Flags plain `http`, text before an `@` (which is not the site), punycode domains that imitate other letters, raw IP addresses and unusual ports. |
 | Blocklist check | Checks the domain and its parent domains against the malicious, suspicious and tracking lists from [Pi-hole Optimized Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists). A match adds a confirmation step and never blocks the link. A switch in settings turns the check off. |
 | Files from WSL | Converts WSL paths and `file://` links to Windows links for PDF, PNG, JPEG, GIF, WebP and SVG files. |
-| Keyboard first | `1` to `9` open in a browser, `C` copies the link, `Esc` closes. |
+| Keyboard first | `1` to `9` open in a browser in the order you set, `C` copies the link, `Esc` closes. |
 | Private | Links are never logged. linkgate makes two kinds of network request, the blocklist download and a once-a-day check for a new release. Each has a switch in settings. |
 
 ---
@@ -125,12 +125,16 @@ Replace `<you>` with your Windows user name, and use double backslashes because 
 
 | Key | Action |
 |---|---|
-| `1` to `9` | Open in that browser |
+| `1` to `9` | Open in that browser, counting down the list as you ordered it |
 | `C` | Copy the link |
 | `Esc` | Close, or go back from a confirmation or settings |
 | `Enter` | Confirm, on the blocklist confirmation |
 
 Run `linkgate.exe` with no link, or click the gear in the title bar, to open settings. There you choose which browsers appear, turn the blocklist check and the update check on or off, check the blocklists by hand, and start an update when one is available.
+
+### Browser order
+
+The browsers in settings are listed in the order the picker shows them, and the numbers `1` to `9` follow that order. Drag a row by its handle to move it, or focus the handle with the keyboard and press `Alt+Up` or `Alt+Down`. Press `Esc` during a drag to cancel it. Hidden browsers keep their place in the list but take no number. A browser you haven't placed yet, such as one you install later, goes at the end of the list.
 
 ### Warnings
 
