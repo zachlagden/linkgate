@@ -11,6 +11,8 @@ pub struct Settings {
     pub seen: Vec<String>,
     #[serde(default = "enabled_by_default")]
     pub blocklist_enabled: bool,
+    #[serde(default = "enabled_by_default")]
+    pub update_check_enabled: bool,
 }
 
 fn enabled_by_default() -> bool {
@@ -23,6 +25,7 @@ impl Default for Settings {
             hidden: Vec::new(),
             seen: Vec::new(),
             blocklist_enabled: true,
+            update_check_enabled: true,
         }
     }
 }
@@ -72,7 +75,27 @@ mod tests {
     }
 
     #[test]
+    fn update_check_is_on_when_the_field_is_missing() {
+        let settings: Settings = serde_json::from_str(r#"{"hidden":[],"seen":[],"blocklistEnabled":false}"#).unwrap();
+        assert!(settings.update_check_enabled);
+        assert!(!settings.blocklist_enabled);
+    }
+
+    #[test]
+    fn update_check_off_survives_a_round_trip() {
+        let settings = Settings {
+            update_check_enabled: false,
+            ..Settings::default()
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let loaded: Settings = serde_json::from_str(&json).unwrap();
+        assert!(!loaded.update_check_enabled);
+        assert!(loaded.blocklist_enabled);
+    }
+
+    #[test]
     fn default_has_the_blocklist_on() {
         assert!(Settings::default().blocklist_enabled);
+        assert!(Settings::default().update_check_enabled);
     }
 }
