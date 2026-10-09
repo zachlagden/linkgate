@@ -46,7 +46,7 @@ It is a Tauri 2 app. The Rust side handles parsing, blocklist lookups, browser d
 | Blocklist check | Checks the domain and its parent domains against the malicious, suspicious and tracking lists from [Pi-hole Optimized Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists). A match adds a confirmation step and never blocks the link. A switch in settings turns the check off. |
 | Files from WSL | Converts WSL paths and `file://` links to Windows links for PDF, PNG, JPEG, GIF, WebP and SVG files. |
 | Keyboard first | `1` to `9` open in a browser, `C` copies the link, `Esc` closes. |
-| Private | Links are never logged. The only network traffic is the blocklist download, which you can turn off. |
+| Private | Links are never logged. linkgate makes two kinds of network request, the blocklist download and a once-a-day check for a new release. Each has a switch in settings. |
 
 ---
 
@@ -130,7 +130,7 @@ Replace `<you>` with your Windows user name, and use double backslashes because 
 | `Esc` | Close, or go back from a confirmation or settings |
 | `Enter` | Confirm, on the blocklist confirmation |
 
-Run `linkgate.exe` with no link, or click the gear in the title bar, to open settings. There you choose which browsers appear, turn the blocklist check on or off, and check the blocklists by hand.
+Run `linkgate.exe` with no link, or click the gear in the title bar, to open settings. There you choose which browsers appear, turn the blocklist check and the update check on or off, check the blocklists by hand, and start an update when one is available.
 
 ### Warnings
 
@@ -170,16 +170,23 @@ Firefox reads a WSL file only as `file://///wsl.localhost/<distro>/...`, with fi
 
 Blocklists are downloaded to `%LOCALAPPDATA%\linkgate\lists` and converted to a sorted index that is memory-mapped and binary-searched, so a lookup doesn't load the 2 million domain list into memory. When linkgate starts and the last check is more than 24 hours old, it starts a detached `linkgate.exe --update-lists` process that fetches only the lists whose ETag changed.
 
-Turn off "Check links against the blocklists" in settings and linkgate stops looking links up and stops downloading lists, so it makes no network requests. The lists already on disk stay there, and the check resumes when you turn the switch back on.
+Turn off "Check links against the blocklists" in settings and linkgate stops looking links up and stops downloading lists. The lists already on disk stay there, and the check resumes when you turn the switch back on.
+
+### Updates
+
+When linkgate starts and the last check is more than 24 hours old, it starts a detached `linkgate.exe --check-update` process. That process asks the GitHub API for the latest release of this repository, with the `linkgate/<version>` user agent and nothing else, and writes the result to `%LOCALAPPDATA%\linkgate\update.json`. If the release is newer than the running version, settings shows "Update available" with an Update button. The button runs `linkgate-setup.exe --update` from the folder `linkgate.exe` is in, or opens the releases page when that file isn't there. A failed check is logged and treated as no update.
+
+Turn off "Check for updates" in settings and linkgate makes no release check. With both switches off it makes no network requests at all.
 
 ### Where files live
 
 | Path | Contents |
 | --- | --- |
 | `%LOCALAPPDATA%\Programs\linkgate\linkgate.exe` | The app |
-| `%APPDATA%\linkgate\settings.json` | Hidden browsers and the blocklist switch |
+| `%APPDATA%\linkgate\settings.json` | Hidden browsers and the blocklist and update switches |
 | `%LOCALAPPDATA%\linkgate\lists\` | Blocklists and their index |
 | `%LOCALAPPDATA%\linkgate\icons\` | Cached browser icons |
+| `%LOCALAPPDATA%\linkgate\update.json` | The latest release found by the last update check |
 | `%LOCALAPPDATA%\linkgate\linkgate.log` | Errors as JSON lines. Links are never logged. |
 | `~/.local/bin/linkgate-open` | The WSL handler |
 | `~/.local/share/applications/linkgate.desktop` | The desktop entry that registers it |
@@ -202,12 +209,16 @@ Turn off "Check links against the blocklists" in settings and linkgate stops loo
 
 ```
 src-tauri/src/
-├── main.rs         # entry point, --update-lists mode
+├── main.rs         # entry point, --update-lists and --check-update modes
 ├── commands.rs     # commands the window calls
 ├── link.rs         # link parsing, domain split and warning signals
 ├── browsers.rs     # registry detection and launching
 ├── icons.rs        # browser icon extraction
 ├── lists/          # blocklist download, index and lookup
+├── updates.rs      # release check, version comparison and starting the installer
+├── net.rs          # HTTP client shared by the downloads and the release check
+├── background.rs   # detached background processes
+├── lock.rs         # lock files that stop two background runs overlapping
 ├── placement.rs    # window placement on the monitor under the cursor
 ├── settings.rs     # settings.json
 ├── paths.rs        # data and config directories
