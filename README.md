@@ -54,7 +54,7 @@ It is a Tauri 2 app. The Rust side handles parsing, blocklist lookups, browser d
 
 ### Requirements
 
-- Windows 11 with WebView2, and WSL with interop enabled. `[interop] enabled` must not be `false` in `/etc/wsl.conf`.
+- Windows 11 with WebView2, and WSL with interop enabled. `[interop] enabled` must not be `false` in `/etc/wsl.conf`. `appendWindowsPath = false` is fine, because the handler starts `linkgate.exe` by its full path.
 - Rust with the `x86_64-pc-windows-msvc` target, `cargo-xwin`, `clang`, `lld` and `llvm`.
 - Node 22 and pnpm.
 
