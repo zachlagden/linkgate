@@ -63,6 +63,22 @@ echo 'export BROWSER="$HOME/.local/bin/linkgate-open"' >> ~/.zshenv
 sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser "$HOME/.local/bin/linkgate-open" 500
 ```
 
+## Use it from VS Code
+
+VS Code for Windows opens links without going through WSL, so it needs two settings in its own `settings.json` (`Ctrl+Shift+P`, then `Preferences: Open User Settings (JSON)`):
+
+```json
+{
+  "workbench.externalBrowser": "C:\\Users\\<you>\\AppData\\Local\\Programs\\linkgate\\linkgate.exe",
+  "workbench.browser.openLocalhostLinks": false
+}
+```
+
+- `workbench.externalBrowser` makes VS Code start `linkgate.exe` with the URL for every `http` and `https` link, whether it comes from the editor, the terminal or an extension.
+- `workbench.browser.openLocalhostLinks` stops VS Code opening `localhost`, `127.0.0.1` and `0.0.0.0` links in its Integrated Browser. Without it, those links skip linkgate.
+
+Replace `<you>` with your Windows user name, and use double backslashes because the file is JSON. Reload the window afterwards with `Ctrl+Shift+P`, then `Developer: Reload Window`.
+
 ## Development
 
 | Command | What it does |
