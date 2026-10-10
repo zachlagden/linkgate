@@ -47,41 +47,34 @@ It is a Tauri 2 app. The Rust side handles parsing, blocklist lookups, browser d
 | Files from WSL | Converts WSL paths and `file://` links to Windows links for PDF, PNG, JPEG, GIF, WebP and SVG files. |
 | Timeout | The window closes by itself after 3 to 60 seconds, 10 by default, or stays open until you choose if you set it to never. A bar under the title shows the time left. |
 | Keyboard first | `1` to `9` open in a browser in the order you set, `C` copies the link, `Esc` closes. |
-| Private | Links are never logged. linkgate makes two kinds of network request, the blocklist download and a once-a-day check for a new release. Each has a switch in settings. |
+| Installer | `linkgate-setup.exe` downloads and verifies the latest release, adds Start menu and desktop shortcuts, and sets up WSL and VS Code. Each part is optional. |
+| Private | Links are never logged. linkgate makes two kinds of network request, the blocklist download and a once-a-day check for a new release, and each has a switch in settings. The installer talks to GitHub only while it runs. |
 
 ---
 
 ## Install
 
-### Requirements
+### With the installer
 
-- Windows 11 with WebView2, and WSL with interop enabled. `[interop] enabled` must not be `false` in `/etc/wsl.conf`. `appendWindowsPath = false` is fine, because the handler starts `linkgate.exe` by its full path.
-- Rust with the `x86_64-pc-windows-msvc` target, `cargo-xwin`, `clang`, `lld` and `llvm`.
-- Node 22 and pnpm.
+1. Download `linkgate-setup.exe` from the [latest release](https://github.com/zachlagden/linkgate/releases/latest).
+2. Run it. Windows may show "Windows protected your PC", which [the next section](#windows-smartscreen) explains.
+3. Tick what you want in the window and press Install.
 
-```bash
-rustup target add x86_64-pc-windows-msvc
-cargo install --locked cargo-xwin
-sudo apt install clang lld llvm
-```
+The installer needs Windows 11 with WebView2. WSL setup also needs WSL with interop enabled (`[interop] enabled` must not be `false` in `/etc/wsl.conf`; `appendWindowsPath = false` is fine) and `xdg-utils` and `python3` inside each distribution you tick.
 
-`cargo-xwin` downloads the MSVC CRT and Windows SDK on first use, which means accepting Microsoft's licence for them.
+| Option | Default | What it does |
+| --- | --- | --- |
+| Start menu shortcut | Always | Adds `linkgate` to the Start menu. It opens the settings page. |
+| Desktop shortcut | Off | Adds the same shortcut to the desktop. |
+| WSL distributions | The default distribution ticked | For each ticked distribution, installs `~/.local/bin/linkgate-open` and a `linkgate.desktop` handler, and makes it the default for `http`, `https`, `text/html`, `application/pdf` and the common image types. |
+| `BROWSER` variable | Off | Adds `export BROWSER="$HOME/.local/bin/linkgate-open"` to `~/.zshenv` or `~/.profile` in each ticked distribution. |
+| VS Code | Off | For `Code` and `Code - Insiders`, when found, sets the two [VS Code settings](#use-it-from-vs-code) after backing up `settings.json` to `settings.json.linkgate-backup`. |
 
-### Build and install
+Whatever you tick, the installer downloads `linkgate.exe` from the latest release, checks it against the release's `SHA256SUMS`, installs it to `%LOCALAPPDATA%\Programs\linkgate`, adds linkgate to Windows Settings under Apps, and starts the first blocklist download. It also keeps a copy of itself, `linkgate-setup.exe`, in that folder.
 
-```bash
-git clone https://github.com/zachlagden/linkgate.git
-cd linkgate
-pnpm install
-pnpm install:windows
-```
-
-This builds `linkgate.exe`, copies it to `%LOCALAPPDATA%\Programs\linkgate`, installs `~/.local/bin/linkgate-open` and a `linkgate.desktop` handler, and sets that handler as the default for `http`, `https`, `text/html`, `application/pdf` and the common image types. It then downloads the blocklists.
-
-Two settings are left to you, because they change files outside the project:
+One WSL setting needs `sudo`, so the installer shows the command and never runs it:
 
 ```bash
-echo 'export BROWSER="$HOME/.local/bin/linkgate-open"' >> ~/.zshenv
 sudo update-alternatives --install /usr/bin/x-www-browser x-www-browser "$HOME/.local/bin/linkgate-open" 500
 ```
 
@@ -91,22 +84,85 @@ Test it:
 xdg-open https://example.com
 ```
 
-`scripts/install.sh --skip-build` reinstalls the last build without rebuilding.
+To update, press Update in linkgate's settings when it offers one, or run `linkgate-setup.exe` again. Each run shows your earlier choices ticked. Unticking an option on a later run leaves that part as it is. Uninstalling removes it.
+
+#### Windows SmartScreen
+
+The installer isn't code signed, so on first run Windows shows "Windows protected your PC". Choose "More info", then "Run anyway". Signing certificates cost money, and the source is here to read and build yourself.
+
+To check a download, compare its hash with the release's `SHA256SUMS`:
+
+```powershell
+Get-FileHash .\linkgate-setup.exe -Algorithm SHA256
+```
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+`linkgate.exe` and `linkgate-setup.exe` each carry a build provenance attestation from GitHub Actions. With the [GitHub CLI](https://cli.github.com/):
+
+```bash
+gh attestation verify linkgate-setup.exe --repo zachlagden/linkgate
+```
+
+### Build from source
+
+You need Rust with the `x86_64-pc-windows-msvc` target, `cargo-xwin`, `clang`, `lld` and `llvm`, Node 22 and pnpm, in WSL with interop enabled.
+
+```bash
+rustup target add x86_64-pc-windows-msvc
+cargo install --locked cargo-xwin
+sudo apt install clang lld llvm
+```
+
+`cargo-xwin` downloads the MSVC CRT and Windows SDK on first use, which means accepting Microsoft's licence for them.
+
+```bash
+git clone https://github.com/zachlagden/linkgate.git
+cd linkgate
+pnpm install
+pnpm install:windows
+```
+
+This builds `linkgate.exe`, copies it to `%LOCALAPPDATA%\Programs\linkgate`, installs `~/.local/bin/linkgate-open` and a `linkgate.desktop` handler in the distribution you run it from, and sets that handler as the default for `http`, `https`, `text/html`, `application/pdf` and the common image types. It then downloads the blocklists. It adds no Start menu shortcut and no Windows Settings entry, and it leaves `BROWSER` and `x-www-browser` to you, as described above:
+
+```bash
+echo 'export BROWSER="$HOME/.local/bin/linkgate-open"' >> ~/.zshenv
+```
+
+`scripts/install.sh --skip-build` reinstalls the last build without rebuilding. `pnpm build:setup` builds the installer with `cargo-xwin` to `installer/src-tauri/target/x86_64-pc-windows-msvc/release/linkgate-setup.exe`.
 
 ### Uninstall
+
+Open Windows Settings, then Apps, then Installed apps, find linkgate and choose Uninstall. Or run:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\linkgate\linkgate-setup.exe" --uninstall
+```
+
+Uninstalling removes `linkgate.exe`, the shortcuts, the Windows Settings entry, and for each distribution the installer set up, the handler files, the `linkgate.desktop` default entries and any `BROWSER` line the installer added. It keeps linkgate's settings and blocklists unless you tick the box to delete them. It changes VS Code only if you tick that box, and then restores the values it replaced. A setting you changed since the install stays.
+
+It doesn't remove the `x-www-browser` alternative, because that needed `sudo`:
+
+```bash
+sudo update-alternatives --remove x-www-browser "$HOME/.local/bin/linkgate-open"
+```
+
+If you installed with `pnpm install:windows`, remove the files by hand instead:
 
 ```bash
 rm -rf "/mnt/c/Users/<you>/AppData/Local/Programs/linkgate" "/mnt/c/Users/<you>/AppData/Local/linkgate" "/mnt/c/Users/<you>/AppData/Roaming/linkgate"
 rm -f ~/.local/bin/linkgate-open ~/.local/share/applications/linkgate.desktop
 ```
 
-Then remove the `BROWSER` line from your shell profile and, if you added it, the `x-www-browser` alternative with `sudo update-alternatives --remove x-www-browser "$HOME/.local/bin/linkgate-open"`. Pick a new default for the file types with `xdg-mime default <app>.desktop x-scheme-handler/https`.
+Then remove the `BROWSER` line from your shell profile and pick a new default for the file types with `xdg-mime default <app>.desktop x-scheme-handler/https`.
 
 ---
 
 ## Use it from VS Code
 
-VS Code for Windows opens links without going through WSL, so it needs two settings in its own `settings.json` (`Ctrl+Shift+P`, then `Preferences: Open User Settings (JSON)`):
+VS Code for Windows opens links without going through WSL, so it needs two settings in its own `settings.json`. The [installer](#with-the-installer) can set them for you when you tick VS Code. To set them by hand, open `settings.json` with `Ctrl+Shift+P`, then `Preferences: Open User Settings (JSON)`, and add:
 
 ```json
 {
@@ -192,6 +248,9 @@ Turn off "Check for updates" in settings and linkgate makes no release check. Wi
 | Path | Contents |
 | --- | --- |
 | `%LOCALAPPDATA%\Programs\linkgate\linkgate.exe` | The app |
+| `%LOCALAPPDATA%\Programs\linkgate\linkgate-setup.exe` | The installer's copy of itself, used for updates and uninstalling |
+| `%LOCALAPPDATA%\linkgate\install.json` | What the installer set up, so it can update and uninstall it |
+| `%APPDATA%\Microsoft\Windows\Start Menu\Programs\linkgate.lnk` | The Start menu shortcut |
 | `%APPDATA%\linkgate\settings.json` | Hidden browsers, their order, the timeout and the blocklist and update switches |
 | `%LOCALAPPDATA%\linkgate\lists\` | Blocklists and their index |
 | `%LOCALAPPDATA%\linkgate\icons\` | Cached browser icons |
@@ -209,8 +268,10 @@ Turn off "Check for updates" in settings and linkgate makes no release check. Wi
 | App shell | Tauri 2 |
 | Backend | Rust, `url`, `idna`, `psl`, `memmap2`, `winreg`, `ureq` |
 | Frontend | React 19, TypeScript, Tailwind CSS 4, Vite |
+| Installer | A second Tauri 2 app in a pnpm workspace: Rust, `jsonc-parser`, `winreg`, `ureq` and React |
 | WSL handler | Bash |
-| Cross-compiling | `cargo-xwin` from WSL, native MSVC on CI |
+| Builds | `cargo-xwin` from WSL, native MSVC on GitHub Actions |
+| Releases | GitHub Actions, with SHA256 checksums and build provenance attestations |
 
 ---
 
@@ -229,12 +290,17 @@ src-tauri/src/
 ├── background.rs   # detached background processes
 ├── lock.rs         # lock files that stop two background runs overlapping
 ├── placement.rs    # window placement on the monitor under the cursor
+├── order.rs        # the order of the browser list
+├── timeout.rs      # the auto-close timeout
 ├── settings.rs     # settings.json
 ├── paths.rs        # data and config directories
 └── logging.rs      # JSON-lines error log
 src/                # React frontend: picker, link anatomy, confirmation, settings
+installer/          # linkgate-setup.exe, the installer (see installer/README.md)
 linux/              # linkgate-open and the desktop entry
 scripts/            # install.sh and the Rust test runner
+docs/               # screenshot and the installer design note
+.github/workflows/  # CI, release and installer refresh
 ```
 
 ---
@@ -247,9 +313,17 @@ scripts/            # install.sh and the Rust test runner
 | `pnpm build` | Type-checks and builds the frontend into `dist/` |
 | `pnpm build:windows` | Builds `linkgate.exe` with `cargo-xwin` |
 | `pnpm test:rust` | Builds the Rust tests for Windows and runs them through interop |
-| `pnpm install:windows` | Builds and installs, as above |
+| `pnpm install:windows` | Builds and installs without the installer, as above |
+| `pnpm build:setup` | Builds `linkgate-setup.exe` with `cargo-xwin` |
+| `pnpm test:setup` | Builds the installer's Rust tests for Windows and runs them through interop |
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the pull request process.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the pull request process and [installer/README.md](installer/README.md) for how the installer works and how to test it without touching your own setup.
+
+### Releases
+
+Pushing a tag named `vX.Y.Z` runs `.github/workflows/release.yml`. It checks that the tag matches the version in `package.json`, both `Cargo.toml` files and both `tauri.conf.json` files, builds `linkgate.exe` and `linkgate-setup.exe` on a Windows runner, writes `SHA256SUMS`, attests the two exes and publishes a release with the notes from the matching `## [X.Y.Z]` section of `CHANGELOG.md`.
+
+A push to `main` that changes `installer/` or `linux/` runs `.github/workflows/installer.yml`. It rebuilds `linkgate-setup.exe` and replaces it, and its line in `SHA256SUMS`, on the latest release without creating a new version. Don't turn on GitHub's immutable releases for this repository, because that blocks replacing release files.
 
 ---
 
@@ -258,19 +332,43 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the pull request process.
 <details>
 <summary>"WSL interop is disabled" or "linkgate.exe is missing"</summary>
 
-`linkgate-open` prints one of these when it can't start the Windows app. For the first, check that `/etc/wsl.conf` doesn't set `[interop] enabled=false`, then run `wsl --shutdown` from Windows. For the second, run `scripts/install.sh` again.
+`linkgate-open` prints one of these when it can't start the Windows app. For the first, check that `/etc/wsl.conf` doesn't set `[interop] enabled=false`, then run `wsl --shutdown` from Windows. For the second, run `linkgate-setup.exe` again, or `scripts/install.sh` if you built from source.
+</details>
+
+<details>
+<summary>The installer says "GitHub has no published linkgate release yet" or "Couldn't reach GitHub"</summary>
+
+The installer downloads from the latest release of this repository. The first message means no release exists yet, so build from source instead. For the second, check your connection and any proxy or firewall that blocks `api.github.com`, then run the installer again.
+</details>
+
+<details>
+<summary>The installer says a download doesn't match its published checksum</summary>
+
+It didn't install the file. Run the installer again. If the message comes back, open an issue with the version shown in the window.
+</details>
+
+<details>
+<summary>The installer says linkgate.exe "is in use and can't be replaced"</summary>
+
+Close linkgate, including its settings window, and run the installer again.
+</details>
+
+<details>
+<summary>The installer says a distribution has no xdg-utils or python3</summary>
+
+Install them inside that distribution, for example `sudo apt install xdg-utils python3`, then run the installer again and tick the distribution.
 </details>
 
 <details>
 <summary>A program still opens links without the picker</summary>
 
-Check which handler `xdg-open` uses with `xdg-mime query default x-scheme-handler/https`. It should print `linkgate.desktop`. Programs that read `$BROWSER` need the export from the install step. Programs that run on Windows, such as VS Code, need their own setting.
+Check which handler `xdg-open` uses with `xdg-mime query default x-scheme-handler/https`. It should print `linkgate.desktop`. Programs that read `$BROWSER` need the `BROWSER` option from the installer, or the export from the build-from-source steps. Programs that run on Windows, such as VS Code, need their own setting.
 </details>
 
 <details>
 <summary>Firefox shows a blank page for a file</summary>
 
-Firefox reads WSL files only as `file://///wsl.localhost/<distro>/...`. linkgate converts to that form when it starts a browser, so a blank page means the build is older than that fix. Reinstall with `pnpm install:windows`.
+Firefox reads WSL files only as `file://///wsl.localhost/<distro>/...`. linkgate converts to that form when it starts a browser, so a blank page means the build is older than that fix. Update linkgate with the installer, or reinstall with `pnpm install:windows` if you built from source.
 </details>
 
 <details>
