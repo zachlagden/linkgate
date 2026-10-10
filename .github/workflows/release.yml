@@ -65,17 +65,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir dist
-          cp src-tauri/target/release/linkgate.exe dist/linkgate.exe
-          cp installer/src-tauri/target/release/linkgate-setup.exe dist/linkgate-setup.exe
-          cd dist
+          mkdir release-files
+          cp src-tauri/target/release/linkgate.exe release-files/linkgate.exe
+          cp installer/src-tauri/target/release/linkgate-setup.exe release-files/linkgate-setup.exe
+          cd release-files
           sha256sum linkgate.exe linkgate-setup.exe | tee SHA256SUMS
           sha256sum --check SHA256SUMS
 
       - uses: actions/upload-artifact@v7
         with:
           name: release-files
-          path: dist/*
+          path: release-files/*
           if-no-files-found: error
 
   publish:
@@ -95,7 +95,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: release-files
-          path: dist
+          path: release-files
 
       - name: Take the release notes from CHANGELOG.md
         run: |
@@ -115,15 +115,15 @@ jobs:
       - uses: actions/attest@v4
         with:
           subject-path: |
-            dist/linkgate.exe
-            dist/linkgate-setup.exe
+            release-files/linkgate.exe
+            release-files/linkgate-setup.exe
 
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "$GITHUB_REF_NAME"
-          dist/linkgate.exe dist/linkgate-setup.exe dist/SHA256SUMS
+          release-files/linkgate.exe release-files/linkgate-setup.exe release-files/SHA256SUMS
           --title "$GITHUB_REF_NAME"
           --notes-file notes.md
           --verify-tag
