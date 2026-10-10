@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import type { BrowserEnv, InitialState, InstallChoices } from "../lib/api";
+import type { BrowserEnv, Distro, InitialState, InstallChoices, Readiness } from "../lib/api";
 import { Button, ChoiceRow, CopyLine, Note, Section } from "../components/ui";
 
 export type Latest = { state: "checking" } | { state: "ready"; version: string } | { state: "failed"; message: string };
@@ -8,6 +8,7 @@ interface OptionsProps {
   state: InitialState;
   latest: Latest;
   choices: InstallChoices;
+  readiness: Record<string, Readiness> | null;
   onChoices: (choices: InstallChoices) => void;
   onRetry: () => void;
   onInstall: () => void;
@@ -47,11 +48,70 @@ function LatestLine({ state, latest, onRetry }: { state: InitialState; latest: L
   return <p className="text-[12.5px] text-ink-3">{text}</p>;
 }
 
-export function Options({ state, latest, choices, onChoices, onRetry, onInstall, onCancel }: OptionsProps): ReactElement {
+function DistroChecks({
+  distro,
+  readiness,
+  choices,
+  onChange,
+}: {
+  distro: Distro;
+  readiness: Record<string, Readiness> | null;
+  choices: InstallChoices;
+  onChange: (installPackages: string[]) => void;
+}): ReactElement | null {
+  if (readiness === null) {
+    return (
+      <p className="border-t border-line px-3 py-2 text-[12px] text-ink-3">
+        Checking what {distro.name} has installed…
+      </p>
+    );
+  }
+  const found = readiness[distro.name];
+  if (!found) return null;
+  const chosen = choices.wslDistros.includes(distro.name);
+  return (
+    <>
+      {found.probeError && (
+        <p className="border-t border-line px-3 py-2 text-[12.5px] leading-snug text-warn">
+          Couldn't check {distro.name}: {found.probeError}
+        </p>
+      )}
+      {found.issue && (
+        <p className="border-t border-line px-3 py-2 text-[12.5px] leading-snug text-warn">{found.issue}</p>
+      )}
+      {found.manual && (
+        <p className="border-t border-line px-3 py-2 text-[12.5px] leading-snug text-ink-3">{found.manual}</p>
+      )}
+      {found.offer && chosen && (
+        <ChoiceRow
+          title={found.offer.label}
+          detail={found.offer.command}
+          mono
+          wrapDetail
+          first={false}
+          checked={choices.installPackages.includes(distro.name)}
+          onChange={(on) => onChange(toggled(choices.installPackages, distro.name, on))}
+        />
+      )}
+    </>
+  );
+}
+
+export function Options({
+  state,
+  latest,
+  choices,
+  readiness,
+  onChoices,
+  onRetry,
+  onInstall,
+  onCancel,
+}: OptionsProps): ReactElement {
   const update = state.mode === "update";
   const set = (patch: Partial<InstallChoices>): void => onChoices({ ...choices, ...patch });
   const availableVsCode = state.vscode.filter((target) => target.available);
   const wslChosen = choices.wslDistros.length > 0;
+  const checking = wslChosen && readiness === null;
 
   return (
     <>
@@ -86,14 +146,21 @@ export function Options({ state, latest, choices, onChoices, onRetry, onInstall,
             <p className="px-3 py-3 text-[13px] text-ink-2">{state.wsl.note ?? "No WSL distributions found."}</p>
           )}
           {state.wsl.distros.map((distro, index) => (
-            <ChoiceRow
-              key={distro.name}
-              title={distro.name}
-              detail={distro.isDefault ? "Default distribution" : undefined}
-              first={index === 0}
-              checked={choices.wslDistros.includes(distro.name)}
-              onChange={(on) => set({ wslDistros: toggled(choices.wslDistros, distro.name, on) })}
-            />
+            <div key={distro.name} className="flex flex-col">
+              <ChoiceRow
+                title={distro.name}
+                detail={distro.isDefault ? "Default distribution" : undefined}
+                first={index === 0}
+                checked={choices.wslDistros.includes(distro.name)}
+                onChange={(on) => set({ wslDistros: toggled(choices.wslDistros, distro.name, on) })}
+              />
+              <DistroChecks
+                distro={distro}
+                readiness={readiness}
+                choices={choices}
+                onChange={(installPackages) => set({ installPackages })}
+              />
+            </div>
           ))}
         </Section>
 
@@ -154,7 +221,7 @@ export function Options({ state, latest, choices, onChoices, onRetry, onInstall,
       </div>
       <footer className="flex shrink-0 justify-end gap-2 border-t border-line bg-chrome px-4 py-3">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button variant="primary" onClick={onInstall} disabled={latest.state === "checking"} autoFocus>
+        <Button variant="primary" onClick={onInstall} disabled={latest.state === "checking" || checking} autoFocus>
           {update ? "Update" : "Install"}
         </Button>
       </footer>

@@ -43,20 +43,30 @@ interface ChoiceRowProps {
   title: string;
   detail?: string;
   mono?: boolean;
+  wrapDetail?: boolean;
   checked: boolean;
   disabled?: boolean;
   first: boolean;
   onChange: (checked: boolean) => void;
 }
 
-export function ChoiceRow({ title, detail, mono, checked, disabled, first, onChange }: ChoiceRowProps): ReactElement {
+export function ChoiceRow({
+  title,
+  detail,
+  mono,
+  wrapDetail,
+  checked,
+  disabled,
+  first,
+  onChange,
+}: ChoiceRowProps): ReactElement {
   return (
     <label className={`flex items-center gap-3 px-3 py-2.5 ${first ? "" : "border-t border-line"}`}>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-medium text-ink">{title}</span>
         {detail && (
           <span
-            className={`block truncate text-[11.5px] text-ink-3 ${mono ? "font-mono text-[11px]" : ""}`}
+            className={`block text-[11.5px] text-ink-3 ${wrapDetail ? "break-words" : "truncate"} ${mono ? "font-mono text-[11px]" : ""}`}
             title={detail}
           >
             {detail}
