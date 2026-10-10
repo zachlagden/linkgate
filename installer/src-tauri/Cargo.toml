@@ -24,7 +24,7 @@ winreg = "0.55"
 arboard = { version = "3", default-features = false }
 ureq = { version = "2", default-features = false, features = ["native-tls"] }
 native-tls = "0.2"
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Graphics_Dwm",
   "Win32_Storage_FileSystem",
