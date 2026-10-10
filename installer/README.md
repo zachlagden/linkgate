@@ -49,6 +49,10 @@ LINKGATE_SETUP_TEST_DISTRO=Ubuntu WSLENV=LINKGATE_SETUP_TEST_DISTRO bash install
 
 It runs with `HOME` pointed at a scratch folder, so it doesn't touch the distribution's real files.
 
+## Releases
+
+`linkgate-setup.exe` is published as a release asset next to `linkgate.exe` and `SHA256SUMS`. A `vX.Y.Z` tag builds all three in `.github/workflows/release.yml`. A push to `main` that changes `installer/` or `../linux/` rebuilds the installer and replaces it on the latest release in `.github/workflows/installer.yml`. [docs/installer-design.md](../docs/installer-design.md) explains why.
+
 ## Testing hooks
 
 | Variable | Effect |

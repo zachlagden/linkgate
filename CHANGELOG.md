@@ -4,6 +4,10 @@
 
 ### Added
 
+- `linkgate-setup.exe`, an installer that downloads the latest release, checks it against `SHA256SUMS` and installs it. It adds a Start menu shortcut and an optional desktop shortcut, sets up the WSL handler for each distribution you tick, and can set the VS Code link settings. Running it again updates, and Windows Settings can uninstall it.
+- A release workflow that builds `linkgate.exe` and `linkgate-setup.exe` on a Windows runner and publishes them with `SHA256SUMS` and build provenance attestations when a `vX.Y.Z` tag is pushed.
+- A workflow that replaces `linkgate-setup.exe` on the latest release when the installer or the WSL files change, without a new version.
+- CI builds, lints and tests the installer.
 - A setting for how long the window waits before closing, from 3 to 60 seconds, or never. The default stays at 10 seconds.
 - Drag the browsers in settings into the order you want. The picker and the `1` to `9` keys follow that order, and `Alt+Up` and `Alt+Down` on a handle move a browser from the keyboard.
 - A once-a-day check for a newer release, shown in settings as "Update available" with an Update button that runs the installer. A settings switch turns the check off.
