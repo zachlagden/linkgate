@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- The installer checks each WSL distribution for `xdg-utils` and `python3`, and offers to install what is missing with `apt-get`, `dnf`, `pacman`, `zypper` or `apk`, as root and only when you leave the box ticked. Uninstalling offers to remove only the packages the installer added.
+
 ## [0.2.0]
 
 ### Added
