@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build and checksum the release files
+    name: Build the release files
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -61,7 +61,7 @@ jobs:
       - name: Build linkgate-setup.exe
         run: pnpm --filter linkgate-setup exec tauri build --no-bundle
 
-      - name: Collect the files and write SHA256SUMS
+      - name: Collect the files and print their SHA256 hashes
         shell: bash
         run: |
           set -euo pipefail
@@ -69,8 +69,7 @@ jobs:
           cp src-tauri/target/release/linkgate.exe release-files/linkgate.exe
           cp installer/src-tauri/target/release/linkgate-setup.exe release-files/linkgate-setup.exe
           cd release-files
-          sha256sum linkgate.exe linkgate-setup.exe | tee SHA256SUMS
-          sha256sum --check SHA256SUMS
+          sha256sum linkgate.exe linkgate-setup.exe
 
       - uses: actions/upload-artifact@v7
         with:
@@ -123,7 +122,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "$GITHUB_REF_NAME"
-          release-files/linkgate.exe release-files/linkgate-setup.exe release-files/SHA256SUMS
+          release-files/linkgate.exe release-files/linkgate-setup.exe
           --title "$GITHUB_REF_NAME"
           --notes-file notes.md
           --verify-tag
