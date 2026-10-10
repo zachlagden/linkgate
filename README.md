@@ -60,13 +60,14 @@ It is a Tauri 2 app. The Rust side handles parsing, blocklist lookups, browser d
 2. Run it. Windows may show "Windows protected your PC", which [the next section](#windows-smartscreen) explains.
 3. Tick what you want in the window and press Install.
 
-The installer needs Windows 11 with WebView2. WSL setup also needs WSL with interop enabled (`[interop] enabled` must not be `false` in `/etc/wsl.conf`; `appendWindowsPath = false` is fine) and `xdg-utils` and `python3` inside each distribution you tick.
+The installer needs Windows 11 with WebView2. WSL setup also needs WSL with interop enabled (`[interop] enabled` must not be `false` in `/etc/wsl.conf`; `appendWindowsPath = false` is fine) and `xdg-utils` and `python3` inside each distribution you tick. If either is missing, the installer offers to install it for you.
 
 | Option | Default | What it does |
 | --- | --- | --- |
 | Start menu shortcut | Always | Adds `linkgate` to the Start menu. It opens the settings page. |
 | Desktop shortcut | Off | Adds the same shortcut to the desktop. |
 | WSL distributions | The default distribution ticked | For each ticked distribution, installs `~/.local/bin/linkgate-open` and a `linkgate.desktop` handler, and makes it the default for `http`, `https`, `text/html`, `application/pdf` and the common image types. |
+| Install missing packages | On, shown only when something is missing | When a ticked distribution has no `xdg-utils` or `python3`, the window says so and shows the exact package manager command. With the box ticked, the installer runs it as root through `wsl.exe -u root`, so no password is needed. It supports `apt-get`, `dnf`, `pacman`, `zypper` and `apk`. Untick the box to install them yourself. |
 | `BROWSER` variable | Off | Adds `export BROWSER="$HOME/.local/bin/linkgate-open"` to `~/.zshenv` or `~/.profile` in each ticked distribution. |
 | VS Code | Off | For `Code` and `Code - Insiders`, when found, sets the two [VS Code settings](#use-it-from-vs-code) after backing up `settings.json` to `settings.json.linkgate-backup`. |
 
@@ -141,7 +142,7 @@ Open Windows Settings, then Apps, then Installed apps, find linkgate and choose 
 & "$env:LOCALAPPDATA\Programs\linkgate\linkgate-setup.exe" --uninstall
 ```
 
-Uninstalling removes `linkgate.exe`, the shortcuts, the Windows Settings entry, and for each distribution the installer set up, the handler files, the `linkgate.desktop` default entries and any `BROWSER` line the installer added. It keeps linkgate's settings and blocklists unless you tick the box to delete them. It changes VS Code only if you tick that box, and then restores the values it replaced. A setting you changed since the install stays.
+Uninstalling removes `linkgate.exe`, the shortcuts, the Windows Settings entry, and for each distribution the installer set up, the handler files, the `linkgate.desktop` default entries and any `BROWSER` line the installer added. It keeps linkgate's settings and blocklists unless you tick the box to delete them. It offers to remove `xdg-utils` or `python3` from a distribution only if the installer added them, and you have to tick that box too, because other programs there may use them. It changes VS Code only if you tick that box, and then restores the values it replaced. A setting you changed since the install stays.
 
 It doesn't remove the `x-www-browser` alternative, because that needed `sudo`:
 
@@ -356,7 +357,7 @@ Close linkgate, including its settings window, and run the installer again.
 <details>
 <summary>The installer says a distribution has no xdg-utils or python3</summary>
 
-Install them inside that distribution, for example `sudo apt install xdg-utils python3`, then run the installer again and tick the distribution.
+The installer offers to install them for you when it finds a supported package manager. If the offer isn't there, or you unticked it, install them inside that distribution, for example `sudo apt install xdg-utils python3`, then run the installer again and tick the distribution. If the install fails, the window shows the last lines of the package manager's output.
 </details>
 
 <details>

@@ -55,7 +55,7 @@ The installer is a small window, built like the picker with Tauri and React. It 
 2. Copy itself to `%LOCALAPPDATA%\Programs\linkgate\linkgate-setup.exe`, so the app's update button and the uninstall entry can run it. When it runs from that copy, it fetches and verifies a newer `linkgate-setup.exe` from the release.
 3. Create a Start menu shortcut, `linkgate`, that starts `linkgate.exe` with no link. That opens the settings page. Register the uninstall entry in Windows Settings.
 4. Optionally create a desktop shortcut to the same target.
-5. Optionally set up WSL. The installer lists distributions with `wsl.exe -l -q`, skips Docker's internal ones, and ticks the default. For each ticked distribution, it writes `~/.local/bin/linkgate-open` and `~/.local/share/applications/linkgate.desktop` and registers the handler with `xdg-mime` for `http`, `https`, `text/html`, `application/pdf` and the common image types. The path to `linkgate.exe` inside the distribution comes from `wslpath -u` run there. The `BROWSER` export is a separate tickbox. The `x-www-browser` alternative needs `sudo`, so the installer shows the command and never runs it.
+5. Optionally set up WSL. The installer lists distributions with `wsl.exe -l -q`, skips Docker's internal ones, and ticks the default. For each ticked distribution, it writes `~/.local/bin/linkgate-open` and `~/.local/share/applications/linkgate.desktop` and registers the handler with `xdg-mime` for `http`, `https`, `text/html`, `application/pdf` and the common image types. The path to `linkgate.exe` inside the distribution comes from `wslpath -u` run there. Before that, it probes each distribution for `xdg-mime`, `python3` and a package manager, and offers to install what is missing as root through `wsl.exe -u root`, only with the tickbox ticked. The `BROWSER` export is a separate tickbox. The `x-www-browser` alternative needs `sudo`, so the installer shows the command and never runs it.
 6. Optionally set `workbench.externalBrowser` and `workbench.browser.openLocalhostLinks` in VS Code's user `settings.json`, after backing up the file. The installer looks for `%APPDATA%\Code\User\settings.json` and `%APPDATA%\Code - Insiders\User\settings.json`, offers each one it finds, and edits the file in place so comments and formatting survive.
 7. Start the first blocklist download.
 
@@ -67,7 +67,7 @@ What the installer set up is recorded in `%LOCALAPPDATA%\linkgate\install.json`.
 
 Running `linkgate-setup.exe` again updates the app, then offers the same options with the current choices ticked. `--update` opens the same window.
 
-Uninstalling removes the exe, the shortcuts, the Windows Settings entry and the WSL files the installer wrote. It leaves the blocklists and settings unless the user asks to remove them. It changes VS Code only when the user ticks that box, and then restores the values it replaced.
+Uninstalling removes the exe, the shortcuts, the Windows Settings entry and the WSL files the installer wrote. It leaves the blocklists and settings unless the user asks to remove them. It offers to remove packages from a distribution only when the installer added them. It changes VS Code only when the user ticks that box, and then restores the values it replaced.
 
 ## Update checks
 
