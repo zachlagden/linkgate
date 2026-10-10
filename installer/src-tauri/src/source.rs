@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -12,6 +13,7 @@ const LATEST_URL: &str = "https://api.github.com/repos/zachlagden/linkgate/relea
 const MAX_DOWNLOAD: u64 = 100 * 1024 * 1024;
 const CHUNK: usize = 64 * 1024;
 const DOWNLOAD_TIMEOUT_SECS: u64 = 600;
+const DIGESTS_FILE: &str = "digests.json";
 
 #[derive(Clone, Debug)]
 pub enum Source {
@@ -23,6 +25,7 @@ pub enum Source {
 pub struct Asset {
     pub name: String,
     pub url: Option<String>,
+    pub digest: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -34,6 +37,13 @@ pub struct Release {
 impl Release {
     pub fn has(&self, name: &str) -> bool {
         self.assets.iter().any(|asset| asset.name == name)
+    }
+
+    pub fn digest_of(&self, name: &str) -> Option<&str> {
+        self.assets
+            .iter()
+            .find(|asset| asset.name == name)
+            .and_then(|asset| asset.digest.as_deref())
     }
 }
 
@@ -48,6 +58,8 @@ struct ReleaseJson {
 struct AssetJson {
     name: String,
     browser_download_url: String,
+    #[serde(default)]
+    digest: Option<String>,
 }
 
 pub fn version_from_tag(tag: &str) -> String {
@@ -65,6 +77,7 @@ pub fn parse_release(json: &str) -> Result<Release, String> {
             .map(|asset| Asset {
                 name: asset.name,
                 url: Some(asset.browser_download_url),
+                digest: asset.digest,
             })
             .collect(),
     })
@@ -132,12 +145,17 @@ impl Source {
             Source::Local(dir) => {
                 let entries = std::fs::read_dir(dir)
                     .map_err(|e| format!("Couldn't read the local source {}: {e}", dir.display()))?;
+                let digests = local_digests(dir);
                 let assets = entries
                     .flatten()
                     .filter(|entry| entry.path().is_file())
-                    .map(|entry| Asset {
-                        name: entry.file_name().to_string_lossy().into_owned(),
-                        url: None,
+                    .map(|entry| {
+                        let name = entry.file_name().to_string_lossy().into_owned();
+                        Asset {
+                            digest: digests.get(&name).cloned(),
+                            name,
+                            url: None,
+                        }
                     })
                     .collect();
                 let version = std::fs::read_to_string(dir.join("VERSION"))
@@ -171,6 +189,13 @@ impl Source {
             (Source::Github, None) => Err(format!("The latest release gives no download link for {name}.")),
         }
     }
+}
+
+fn local_digests(dir: &std::path::Path) -> HashMap<String, String> {
+    std::fs::read_to_string(dir.join(DIGESTS_FILE))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
 }
 
 fn download(url: &str, name: &str, on_progress: &mut dyn FnMut(u64, Option<u64>)) -> Result<Vec<u8>, String> {
@@ -213,8 +238,8 @@ mod tests {
         "tag_name": "v0.2.0",
         "name": "linkgate 0.2.0",
         "assets": [
-            {"name": "linkgate.exe", "browser_download_url": "https://example.com/linkgate.exe", "size": 10},
-            {"name": "SHA256SUMS", "browser_download_url": "https://example.com/SHA256SUMS", "size": 5}
+            {"name": "linkgate.exe", "browser_download_url": "https://example.com/linkgate.exe", "size": 10, "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+            {"name": "SHA256SUMS", "browser_download_url": "https://example.com/SHA256SUMS", "size": 5, "digest": null}
         ]
     }"#;
 
@@ -225,6 +250,12 @@ mod tests {
         assert!(release.has("linkgate.exe") && release.has("SHA256SUMS"));
         assert!(!release.has("linkgate-setup.exe"));
         assert_eq!(release.assets[0].url.as_deref(), Some("https://example.com/linkgate.exe"));
+        assert_eq!(
+            release.digest_of("linkgate.exe"),
+            Some("sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        );
+        assert_eq!(release.digest_of("SHA256SUMS"), None);
+        assert_eq!(release.digest_of("missing.exe"), None);
     }
 
     #[test]

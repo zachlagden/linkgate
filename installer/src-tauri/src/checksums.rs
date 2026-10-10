@@ -22,12 +22,25 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
-pub fn verify(name: &str, bytes: &[u8], sums: &HashMap<String, String>) -> Result<(), String> {
-    let expected = sums
-        .get(name)
-        .ok_or_else(|| format!("SHA256SUMS has no entry for {name}, so the download can't be checked."))?;
-    let actual = sha256_hex(bytes);
-    if &actual == expected {
+pub fn parse_digest(name: &str, value: &str) -> Result<String, String> {
+    let hex = value
+        .trim()
+        .split_once(':')
+        .filter(|(algorithm, _)| algorithm.eq_ignore_ascii_case("sha256"))
+        .map(|(_, hex)| hex)
+        .filter(|hex| hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()));
+    hex.map(str::to_ascii_lowercase)
+        .ok_or_else(|| format!("GitHub published an unreadable checksum for {name}, so it can't be installed."))
+}
+
+pub fn lookup(name: &str, sums: &HashMap<String, String>) -> Result<String, String> {
+    sums.get(name)
+        .cloned()
+        .ok_or_else(|| format!("The release's SHA256SUMS has no entry for {name}, so the download can't be checked."))
+}
+
+pub fn verify(name: &str, bytes: &[u8], expected: &str) -> Result<(), String> {
+    if sha256_hex(bytes) == expected {
         Ok(())
     } else {
         Err(format!(
@@ -63,9 +76,28 @@ mod tests {
 
     #[test]
     fn verify_accepts_a_match_and_rejects_everything_else() {
+        assert!(verify("linkgate.exe", b"", EMPTY).is_ok());
+        assert!(verify("linkgate.exe", b"tampered", EMPTY).is_err());
+    }
+
+    #[test]
+    fn lookup_reads_the_sums_file_entry() {
         let sums = parse(&format!("{EMPTY}  linkgate.exe\n"));
-        assert!(verify("linkgate.exe", b"", &sums).is_ok());
-        assert!(verify("linkgate.exe", b"tampered", &sums).is_err());
-        assert!(verify("other.exe", b"", &sums).is_err());
+        assert_eq!(lookup("linkgate.exe", &sums).unwrap(), EMPTY);
+        assert!(lookup("other.exe", &sums).is_err());
+    }
+
+    #[test]
+    fn parses_github_digests() {
+        assert_eq!(parse_digest("linkgate.exe", &format!("sha256:{EMPTY}")).unwrap(), EMPTY);
+        assert_eq!(parse_digest("linkgate.exe", &format!("SHA256:{}", EMPTY.to_uppercase())).unwrap(), EMPTY);
+    }
+
+    #[test]
+    fn rejects_malformed_digests() {
+        for bad in ["", "sha256:", "sha256:abc", EMPTY, &format!("sha1:{EMPTY}"), &format!("sha256:{}zz", &EMPTY[..62])] {
+            let error = parse_digest("linkgate.exe", bad).unwrap_err();
+            assert!(error.contains("unreadable checksum"), "{bad}: {error}");
+        }
     }
 }
