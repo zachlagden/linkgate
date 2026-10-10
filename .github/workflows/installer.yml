@@ -65,14 +65,27 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - name: Download the release's SHA256SUMS
+      - name: Check whether the release still carries a SHA256SUMS file
+        id: legacy
         if: steps.latest.outputs.tag != ''
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx SHA256SUMS; then
+            echo "has_sums=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_sums=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download the release's SHA256SUMS
+        if: steps.legacy.outputs.has_sums == 'true'
         env:
           TAG: ${{ steps.latest.outputs.tag }}
         run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir dist
 
       - name: Replace the linkgate-setup.exe line in SHA256SUMS
-        if: steps.latest.outputs.tag != ''
+        if: steps.legacy.outputs.has_sums == 'true'
         working-directory: dist
         run: |
           set -euo pipefail
@@ -87,8 +100,14 @@ jobs:
         with:
           subject-path: dist/linkgate-setup.exe
 
-      - name: Upload linkgate-setup.exe and SHA256SUMS to the release
+      - name: Upload linkgate-setup.exe to the release
         if: steps.latest.outputs.tag != ''
         env:
           TAG: ${{ steps.latest.outputs.tag }}
-        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" dist/linkgate-setup.exe dist/SHA256SUMS --clobber
+        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" dist/linkgate-setup.exe --clobber
+
+      - name: Upload the updated SHA256SUMS to the release
+        if: steps.legacy.outputs.has_sums == 'true'
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" dist/SHA256SUMS --clobber
