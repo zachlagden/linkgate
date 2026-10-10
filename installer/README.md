@@ -1,6 +1,6 @@
 # linkgate-setup
 
-The installer for linkgate. It downloads `linkgate.exe` from the latest GitHub release, checks it against the release's `SHA256SUMS`, and sets up the parts you tick.
+The installer for linkgate. It downloads `linkgate.exe` from the latest GitHub release, checks it against the SHA256 digest GitHub publishes for the file, and sets up the parts you tick.
 
 It is a Tauri 2 app in the same pnpm workspace as linkgate, with its own `src-tauri/` crate. Nothing in it is shared with the main app at build time except the WSL files in `../linux/`, which it embeds.
 
@@ -8,7 +8,7 @@ It is a Tauri 2 app in the same pnpm workspace as linkgate, with its own `src-ta
 
 | Step | Detail |
 | --- | --- |
-| Download | Reads `releases/latest`, downloads `linkgate.exe` and `SHA256SUMS`, verifies the SHA256 and the `MZ` header, then replaces `%LOCALAPPDATA%\Programs\linkgate\linkgate.exe` through a `.new` file. If the exe is in use, it moves the old one aside instead. |
+| Download | Reads `releases/latest`, downloads `linkgate.exe`, verifies its SHA256 against the `digest` in the release answer and checks the `MZ` header, then replaces `%LOCALAPPDATA%\Programs\linkgate\linkgate.exe` through a `.new` file. If the exe is in use, it moves the old one aside instead. |
 | Installer copy | Copies itself to `linkgate-setup.exe` next to the app, so the app's update button can run it. When it runs from that copy, it fetches a newer `linkgate-setup.exe` from the release and verifies it. |
 | Windows Settings | Registers an uninstall entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\linkgate`. |
 | Start menu | Always adds `linkgate.lnk`, which opens linkgate's settings. |
@@ -64,13 +64,13 @@ LINKGATE_SETUP_TEST_DISTRO=<distro without xdg-utils> WSLENV=LINKGATE_SETUP_TEST
 
 ## Releases
 
-`linkgate-setup.exe` is published as a release asset next to `linkgate.exe` and `SHA256SUMS`. A `vX.Y.Z` tag builds all three in `.github/workflows/release.yml`. A push to `main` that changes `installer/` or `../linux/` rebuilds the installer and replaces it on the latest release in `.github/workflows/installer.yml`. [docs/installer-design.md](../docs/installer-design.md) explains why.
+`linkgate-setup.exe` is published as a release asset next to `linkgate.exe`. A `vX.Y.Z` tag builds both in `.github/workflows/release.yml`. A push to `main` that changes `installer/` or `../linux/` rebuilds the installer and replaces it on the latest release in `.github/workflows/installer.yml`. [docs/installer-design.md](../docs/installer-design.md) explains why.
 
 ## Testing hooks
 
 | Variable | Effect |
 | --- | --- |
-| `LINKGATE_SETUP_SOURCE` | A folder holding `linkgate.exe`, `SHA256SUMS` and optionally `linkgate-setup.exe` and `VERSION`. The installer reads them instead of GitHub. |
+| `LINKGATE_SETUP_SOURCE` | A folder holding `linkgate.exe` and optionally `linkgate-setup.exe` and `VERSION`. The installer reads them instead of GitHub. A `digests.json` in the folder maps each file name to its `sha256:<hex>` digest, as GitHub's release answer does. Without it, a `SHA256SUMS` file in `sha256sum` format is read instead, like the fallback for older releases. |
 | `LINKGATE_SETUP_SANDBOX` | A folder that replaces the install directory, data and settings folders, Start menu, desktop, VS Code settings, and the registry key. WSL steps run with `HOME` set to a scratch folder inside the distribution. Package installs and removals are refused in this mode, because they change the real distribution. |
 | `LINKGATE_SETUP_PACKAGE_SHIM` | Only with the sandbox. An absolute path inside the distribution, made of letters, digits and `/_.-`. Package commands then run as your normal user with that folder first on `PATH`, so a fake package manager there records its arguments instead of installing anything. |
 
@@ -97,7 +97,7 @@ src-tauri/src/
 ├── install.rs     # the install and update steps
 ├── uninstall.rs   # the uninstall steps
 ├── source.rs      # GitHub release or local folder
-├── checksums.rs   # SHA256SUMS parsing and verification
+├── checksums.rs   # digest parsing, SHA256SUMS parsing and verification
 ├── fsutil.rs      # atomic replace and in-use handling
 ├── wsl.rs         # shell script generation and running
 ├── distros.rs     # wsl.exe -l -q decoding

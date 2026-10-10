@@ -71,7 +71,7 @@ The installer needs Windows 11 with WebView2. WSL setup also needs WSL with inte
 | `BROWSER` variable | Off | Adds `export BROWSER="$HOME/.local/bin/linkgate-open"` to `~/.zshenv` or `~/.profile` in each ticked distribution. |
 | VS Code | Off | For `Code` and `Code - Insiders`, when found, sets the two [VS Code settings](#use-it-from-vs-code) after backing up `settings.json` to `settings.json.linkgate-backup`. |
 
-Whatever you tick, the installer downloads `linkgate.exe` from the latest release, checks it against the release's `SHA256SUMS`, installs it to `%LOCALAPPDATA%\Programs\linkgate`, adds linkgate to Windows Settings under Apps, and starts the first blocklist download. It also keeps a copy of itself, `linkgate-setup.exe`, in that folder.
+Whatever you tick, the installer downloads `linkgate.exe` from the latest release, checks it against the SHA256 digest GitHub publishes for it, installs it to `%LOCALAPPDATA%\Programs\linkgate`, adds linkgate to Windows Settings under Apps, and starts the first blocklist download. It also keeps a copy of itself, `linkgate-setup.exe`, in that folder.
 
 One WSL setting needs `sudo`, so the installer shows the command and never runs it:
 
@@ -91,17 +91,17 @@ To update, press Update in linkgate's settings when it offers one, or run `linkg
 
 The installer isn't code signed, so on first run Windows shows "Windows protected your PC". Choose "More info", then "Run anyway". Signing certificates cost money, and the source is here to read and build yourself.
 
-To check a download, compare its hash with the release's `SHA256SUMS`:
+To check a download, compare its hash with the digest shown next to the file on the release page:
 
 ```powershell
 Get-FileHash .\linkgate-setup.exe -Algorithm SHA256
 ```
 
 ```bash
-sha256sum --check --ignore-missing SHA256SUMS
+sha256sum linkgate-setup.exe
 ```
 
-`linkgate.exe` and `linkgate-setup.exe` each carry a build provenance attestation from GitHub Actions. With the [GitHub CLI](https://cli.github.com/):
+`linkgate.exe` and `linkgate-setup.exe` each carry a build provenance attestation from GitHub Actions. With the [GitHub CLI](https://cli.github.com/), version 2.49 or later:
 
 ```bash
 gh attestation verify linkgate-setup.exe --repo zachlagden/linkgate
@@ -272,7 +272,7 @@ Turn off "Check for updates" in settings and linkgate makes no release check. Wi
 | Installer | A second Tauri 2 app in a pnpm workspace: Rust, `jsonc-parser`, `winreg`, `ureq` and React |
 | WSL handler | Bash |
 | Builds | `cargo-xwin` from WSL, native MSVC on GitHub Actions |
-| Releases | GitHub Actions, with SHA256 checksums and build provenance attestations |
+| Releases | GitHub Actions, with build provenance attestations |
 
 ---
 
@@ -322,9 +322,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the pull request process and [install
 
 ### Releases
 
-Pushing a tag named `vX.Y.Z` runs `.github/workflows/release.yml`. It checks that the tag matches the version in `package.json`, both `Cargo.toml` files and both `tauri.conf.json` files, builds `linkgate.exe` and `linkgate-setup.exe` on a Windows runner, writes `SHA256SUMS`, attests the two exes and publishes a release with the notes from the matching `## [X.Y.Z]` section of `CHANGELOG.md`.
+Pushing a tag named `vX.Y.Z` runs `.github/workflows/release.yml`. It checks that the tag matches the version in `package.json`, both `Cargo.toml` files and both `tauri.conf.json` files, builds `linkgate.exe` and `linkgate-setup.exe` on a Windows runner, attests the two exes and publishes a release with the notes from the matching `## [X.Y.Z]` section of `CHANGELOG.md`.
 
-A push to `main` that changes `installer/` or `linux/` runs `.github/workflows/installer.yml`. It rebuilds `linkgate-setup.exe` and replaces it, and its line in `SHA256SUMS`, on the latest release without creating a new version. Don't turn on GitHub's immutable releases for this repository, because that blocks replacing release files.
+A push to `main` that changes `installer/` or `linux/` runs `.github/workflows/installer.yml`. It rebuilds `linkgate-setup.exe` and replaces it on the latest release without creating a new version. Don't turn on GitHub's immutable releases for this repository, because that blocks replacing release files.
 
 ---
 

@@ -10,25 +10,26 @@ Before the installer, installing linkgate meant cloning the repository and cross
 - Set up the WSL handler and the VS Code settings, each one optional.
 - Add linkgate to the Start menu, and optionally to the desktop, so settings open without finding the exe.
 - Update by running the same installer again.
-- Verify every download against a published checksum.
+- Verify every download against the SHA256 digest GitHub publishes for it.
 
 ## Release assets
 
-Each release carries three assets with fixed names:
+Each release carries two assets with fixed names:
 
 | Asset | Purpose |
 | --- | --- |
 | `linkgate.exe` | The app |
 | `linkgate-setup.exe` | The installer |
-| `SHA256SUMS` | Checksums for the other two, in `sha256sum` format |
 
-The installer reads the latest release through the GitHub API and downloads `linkgate.exe` and `SHA256SUMS` from it. A failed check for a newer version counts as "no update" and is never an error.
+The installer reads the latest release through the GitHub API and downloads `linkgate.exe` from it. It checks the file against the `digest` field GitHub adds to every asset (`sha256:` and 64 hex digits). The digest comes from the same release as the file, so it detects corruption and a bad download but is no defence against someone who can change the release. The build attestation is the stronger check.
+
+The `v0.2.0` release also carries a `SHA256SUMS` file, because the first installers verified against it. The installer still accepts that file when an asset has no `digest`, so a copy of the old installer can update itself and a newer installer can read an older release. The installer refresh workflow keeps the file in step with the replaced `linkgate-setup.exe` only on a release that already has one, and new releases don't get one. With neither a digest nor a sums file, the installer refuses to install. A failed check for a newer version counts as "no update" and is never an error.
 
 ## Release workflow
 
 `.github/workflows/release.yml` runs when a tag matching `vX.Y.Z` is pushed.
 
-1. A Windows job checks that the tag matches the version in `package.json`, both `Cargo.toml` files and both `tauri.conf.json` files, then builds `linkgate.exe` and `linkgate-setup.exe` with `tauri build --no-bundle`, writes `SHA256SUMS` and uploads the three files as a workflow artifact.
+1. A Windows job checks that the tag matches the version in `package.json`, both `Cargo.toml` files and both `tauri.conf.json` files, then builds `linkgate.exe` and `linkgate-setup.exe` with `tauri build --no-bundle`, and uploads the two files as a workflow artifact.
 2. A publish job attests the two exes with `actions/attest`, takes the release notes from the matching `## [X.Y.Z]` section of `CHANGELOG.md`, and creates the release with `gh release create`. It fails if that section is missing.
 
 On a pull request that changes `release.yml`, only the build job runs. That checks the workflow without publishing.
@@ -39,7 +40,7 @@ Tags are the only thing that creates a version. Changing the installer never doe
 
 The installer is a thin bootstrap. It fetches the app instead of containing it, so most installer changes are independent of app versions.
 
-`.github/workflows/installer.yml` runs on pushes to `main` that touch `installer/`, `linux/` or the workflow itself, and on manual dispatch. It rebuilds `linkgate-setup.exe`. A second job then finds the latest release, replaces the `linkgate-setup.exe` line in its `SHA256SUMS`, attests the new exe, and uploads both files with `gh release upload --clobber`. With no release yet, it ends with a notice. The second job runs only on `main`, so a manual dispatch from another branch can't replace the release's installer.
+`.github/workflows/installer.yml` runs on pushes to `main` that touch `installer/`, `linux/` or the workflow itself, and on manual dispatch. It rebuilds `linkgate-setup.exe`. A second job then finds the latest release, attests the new exe and uploads it with `gh release upload --clobber`. With no release yet, it ends with a notice. The second job runs only on `main`, so a manual dispatch from another branch can't replace the release's installer.
 
 The refreshed installer takes its version from `main`, which can be ahead of the release it is attached to. The installer reads the app from the release, not from its own version, so that doesn't change what it installs.
 
@@ -51,7 +52,7 @@ This relies on release assets being replaceable. Do not enable GitHub's immutabl
 
 The installer is a small window, built like the picker with Tauri and React. It shows a tickbox for each optional part and does nothing for a part left unticked.
 
-1. Download `linkgate.exe` from the latest release, verify its SHA256, and copy it to `%LOCALAPPDATA%\Programs\linkgate`. An existing install is replaced through a `.new` file.
+1. Download `linkgate.exe` from the latest release, verify its digest, and copy it to `%LOCALAPPDATA%\Programs\linkgate`. An existing install is replaced through a `.new` file.
 2. Copy itself to `%LOCALAPPDATA%\Programs\linkgate\linkgate-setup.exe`, so the app's update button and the uninstall entry can run it. When it runs from that copy, it fetches and verifies a newer `linkgate-setup.exe` from the release.
 3. Create a Start menu shortcut, `linkgate`, that starts `linkgate.exe` with no link. That opens the settings page. Register the uninstall entry in Windows Settings.
 4. Optionally create a desktop shortcut to the same target.
@@ -75,4 +76,4 @@ Uninstalling removes the exe, the shortcuts, the Windows Settings entry and the 
 
 ## Signing
 
-The installer ships unsigned. Windows SmartScreen shows "Windows protected your PC" the first time it runs, and the README says so. Users can verify the download against `SHA256SUMS` and the build attestation, or build from source. Applying to SignPath Foundation for free open source signing is a later step.
+The installer ships unsigned. Windows SmartScreen shows "Windows protected your PC" the first time it runs, and the README says so. Users can verify the download against the digest on the release page and the build attestation, or build from source. Applying to SignPath Foundation for free open source signing is a later step.
