@@ -31,7 +31,7 @@ export function UninstallOptions({ state, choices, onChoices, onUninstall, onCan
         )}
 
         <Section title="This removes" note="Everything the installer put on this PC.">
-          <p className="px-3 py-2.5 text-[13px] text-ink">The program and the installer copy in {state.installDir}</p>
+          <p className="px-3 py-2.5 text-[13px] break-words text-ink">The program and the installer copy in {state.installDir}</p>
           <p className="border-t border-line px-3 py-2.5 text-[13px] text-ink">
             The Start menu and desktop shortcuts, and the entry in Windows Settings
           </p>

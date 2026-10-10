@@ -216,7 +216,7 @@ export function Options({
         </Section>
 
         <p className="px-1 text-[12px] leading-snug text-ink-3">
-          Installs to <span className="font-mono">{state.installDir}</span>. Anything left unticked is not changed.
+          Installs to <span className="font-mono break-all">{state.installDir}</span>. Anything left unticked is not changed.
         </p>
       </div>
       <footer className="flex shrink-0 justify-end gap-2 border-t border-line bg-chrome px-4 py-3">
