@@ -155,7 +155,7 @@ pub fn update_all() -> Result<(), String> {
     let Some(_lock) = lock::acquire(&lock_path(), LOCK_STALE_SECS) else {
         return Err("An update is already running.".into());
     };
-    let agent = net::agent(UPDATE_TIMEOUT)?;
+    let agent = net::agent(UPDATE_TIMEOUT);
     let mut meta = read_meta();
     let mut failure = None;
     for list in LIST_NAMES {
@@ -186,18 +186,25 @@ fn update_list(agent: &ureq::Agent, list: &str, previous: &ListMeta) -> Result<O
         .file
         .as_ref()
         .is_some_and(|f| paths::lists_dir().join(f).exists());
-    let mut request = agent.get(&format!("{SOURCE_BASE}/{list}.txt"));
+    let mut request = agent.get(format!("{SOURCE_BASE}/{list}.txt"));
     if let (true, Some(etag)) = (has_file, previous.etag.as_ref()) {
-        request = request.set("If-None-Match", etag);
+        request = request.header("If-None-Match", etag);
     }
-    let response = request.call().map_err(|e| e.to_string())?;
-    if response.status() == 304 {
-        return Ok(None);
+    let mut response = request.call().map_err(|e| e.to_string())?;
+    match response.status().as_u16() {
+        304 => return Ok(None),
+        200..=299 => {}
+        status => return Err(format!("the download answered with status {status}")),
     }
-    let etag = response.header("etag").map(str::to_string);
+    let etag = response
+        .headers()
+        .get("etag")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
     let mut body = String::new();
     response
-        .into_reader()
+        .body_mut()
+        .as_reader()
         .read_to_string(&mut body)
         .map_err(|e| e.to_string())?;
     let domains = index::parse_hosts(&body);
