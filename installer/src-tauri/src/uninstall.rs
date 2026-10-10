@@ -134,24 +134,29 @@ fn restore_vscode(ctx: &Context, item: &VsCodeRecord) -> Result<Option<String>, 
     })
 }
 
+fn ps_quote(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "''"))
+}
+
+fn cleanup_script(paths: &[PathBuf], folders: &[PathBuf], install_dir: &Path) -> String {
+    let files = paths.iter().map(|path| ps_quote(path)).collect::<Vec<_>>().join(",");
+    let trees = folders.iter().map(|path| ps_quote(path)).collect::<Vec<_>>().join(",");
+    let dir = ps_quote(install_dir);
+    format!(
+        "$ErrorActionPreference='SilentlyContinue'; \
+foreach($f in @({files})){{ for($i=0;$i -lt 120 -and (Test-Path -LiteralPath $f);$i++){{ Remove-Item -LiteralPath $f -Force; if(Test-Path -LiteralPath $f){{ Start-Sleep -Milliseconds 500 }} }} }}; \
+foreach($d in @({trees})){{ Remove-Item -LiteralPath $d -Recurse -Force }}; \
+if(-not (Get-ChildItem -LiteralPath {dir} -Force)){{ Remove-Item -LiteralPath {dir} -Force }}"
+    )
+}
+
 fn schedule_cleanup(paths: &[PathBuf], folders: &[PathBuf], install_dir: &Path) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
 
-    let deletes: String = paths
-        .iter()
-        .map(|path| format!(" & del /f /q \"{}\"", path.display()))
-        .collect();
-    let folder_removals: String = folders
-        .iter()
-        .map(|folder| format!(" & rmdir /s /q \"{}\"", folder.display()))
-        .collect();
-    let line = format!(
-        "/C ping -n 3 127.0.0.1 >nul{deletes}{folder_removals} & rmdir \"{}\"",
-        install_dir.display()
-    );
-    Command::new("cmd.exe")
-        .raw_arg(line)
+    Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"])
+        .arg(cleanup_script(paths, folders, install_dir))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -280,4 +285,29 @@ pub fn run(ctx: &Context, choices: &UninstallChoices, report: &mut dyn FnMut(Eve
         }
     }
     Ok(summary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_cleanup_script_retries_each_file_and_names_every_path() {
+        let script = cleanup_script(
+            &[PathBuf::from(r"C:\Users\Alex\AppData\Local\Programs\linkgate\linkgate-setup.exe")],
+            &[PathBuf::from(r"C:\Users\Alex\AppData\Local\uk.zachlagden.linkgate.setup")],
+            Path::new(r"C:\Users\Alex\AppData\Local\Programs\linkgate"),
+        );
+        assert!(script.contains(r"'C:\Users\Alex\AppData\Local\Programs\linkgate\linkgate-setup.exe'"));
+        assert!(script.contains(r"'C:\Users\Alex\AppData\Local\uk.zachlagden.linkgate.setup'"));
+        assert!(script.contains("-lt 120") && script.contains("Start-Sleep"));
+        assert!(script.contains("Get-ChildItem -LiteralPath 'C:\\Users\\Alex\\AppData\\Local\\Programs\\linkgate'"));
+    }
+
+    #[test]
+    fn single_quotes_in_paths_cannot_end_the_quoted_string() {
+        let script = cleanup_script(&[PathBuf::from(r"C:\Users\O'Neil\setup.exe")], &[], Path::new(r"C:\Users\O'Neil"));
+        assert!(script.contains(r"'C:\Users\O''Neil\setup.exe'"));
+        assert!(!script.contains(r"O'Neil\setup.exe'"));
+    }
 }

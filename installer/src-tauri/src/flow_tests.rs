@@ -517,6 +517,36 @@ fn uninstalling_from_the_installed_copy_schedules_its_removal() {
     assert!(!installed.exists(), "the installed setup copy should be deleted after a moment");
 }
 
+#[test]
+fn the_installed_copy_is_still_removed_when_it_stays_locked_for_a_few_seconds() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let sandbox = Sandbox::new("lockedself");
+    let installed = sandbox.locations.setup_path();
+    std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
+    std::fs::write(&installed, b"MZ-installer").unwrap();
+    sandbox.install_as(&InstallChoices::default(), &installed).unwrap();
+    let ctx = Context {
+        locations: &sandbox.locations,
+        source: &sandbox.source,
+        current_exe: &installed,
+    };
+    let held = std::fs::OpenOptions::new().read(true).share_mode(1).open(&installed).unwrap();
+    let summary = uninstall::run(&ctx, &UninstallChoices::default(), &mut |_| {}).unwrap();
+    assert_eq!(failed_ids(&summary), Vec::<&str>::new());
+    std::thread::sleep(std::time::Duration::from_secs(4));
+    assert!(installed.exists(), "the file is held open, so it cannot be gone yet");
+    drop(held);
+    for _ in 0..80 {
+        if !installed.exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    assert!(!installed.exists(), "the installed setup copy should be deleted once it is released");
+    assert!(!sandbox.locations.install_dir.exists(), "the empty install folder should go too");
+}
+
 const ABSENT_DISTRO: &str = "Linkgate-Test-Absent";
 
 fn step_message<'a>(summary: &'a Summary, id: &str) -> &'a str {
