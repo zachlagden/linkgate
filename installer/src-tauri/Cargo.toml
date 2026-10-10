@@ -22,7 +22,7 @@ jsonc-parser = { version = "0.34", features = ["cst", "serde_json"] }
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"
 arboard = { version = "3", default-features = false }
-ureq = { version = "2", default-features = false, features = ["native-tls"] }
+ureq = { version = "3", default-features = false, features = ["native-tls"] }
 native-tls = "0.2"
 windows = { version = "0.62", features = [
   "Win32_Foundation",
