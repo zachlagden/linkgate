@@ -14,10 +14,14 @@ const FAILURE_TAIL_LINES: usize = 4;
 pub const PROBE_SCRIPT: &str = "\
 if command -v xdg-mime >/dev/null 2>&1; then echo xdg=1; else echo xdg=0; fi
 if command -v python3 >/dev/null 2>&1; then echo python=1; else echo python=0; fi
+if command -v bash >/dev/null 2>&1; then echo bash=1; else echo bash=0; fi
+if command -v awk >/dev/null 2>&1; then echo awk=1; else echo awk=0; fi
 for manager in apt-get dnf pacman zypper apk; do
   if command -v \"$manager\" >/dev/null 2>&1; then echo \"manager=$manager\"; break; fi
 done
 ";
+
+const ROOT_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Manager {
@@ -75,14 +79,11 @@ impl Manager {
     }
 
     fn argv(self, words: Vec<String>) -> Vec<String> {
-        match self {
-            Manager::Apt => ["env", "DEBIAN_FRONTEND=noninteractive"]
-                .iter()
-                .map(|word| word.to_string())
-                .chain(words)
-                .collect(),
-            _ => words,
+        let mut head = vec!["env".to_string(), format!("PATH={ROOT_PATH}")];
+        if self == Manager::Apt {
+            head.push("DEBIAN_FRONTEND=noninteractive".to_string());
         }
+        head.into_iter().chain(words).collect()
     }
 
     pub fn install_words(self, packages: &[String]) -> Vec<String> {
@@ -94,10 +95,14 @@ impl Manager {
     }
 
     fn update_argv(self) -> Option<Vec<String>> {
-        match self {
-            Manager::Apt => Some(self.argv(vec!["apt-get".into(), "update".into(), "-q".into()])),
-            _ => None,
-        }
+        let words: &[&str] = match self {
+            Manager::Apt => &["apt-get", "update", "-q"],
+            Manager::Pacman => &["pacman", "-Sy", "--noconfirm"],
+            Manager::Zypper => &["zypper", "--non-interactive", "refresh"],
+            Manager::Apk => &["apk", "update"],
+            Manager::Dnf => return None,
+        };
+        Some(self.argv(words.iter().map(|word| word.to_string()).collect()))
     }
 }
 
@@ -105,11 +110,17 @@ impl Manager {
 pub struct Probe {
     pub xdg: bool,
     pub python: bool,
+    pub bash: bool,
+    pub awk: bool,
     pub manager: Option<Manager>,
 }
 
 pub fn parse_probe(output: &str) -> Option<Probe> {
-    let mut probe = Probe::default();
+    let mut probe = Probe {
+        bash: true,
+        awk: true,
+        ..Probe::default()
+    };
     let mut saw_xdg = false;
     for line in output.lines().map(str::trim) {
         match line.split_once('=') {
@@ -118,6 +129,8 @@ pub fn parse_probe(output: &str) -> Option<Probe> {
                 probe.xdg = value == "1";
             }
             Some(("python", value)) => probe.python = value == "1",
+            Some(("bash", value)) => probe.bash = value == "1",
+            Some(("awk", value)) => probe.awk = value == "1",
             Some(("manager", value)) => probe.manager = Manager::from_id(value),
             _ => {}
         }
@@ -132,6 +145,12 @@ pub fn missing_names(probe: &Probe) -> Vec<&'static str> {
     }
     if !probe.python {
         names.push("python3");
+    }
+    if !probe.bash {
+        names.push("bash");
+    }
+    if !probe.awk {
+        names.push("awk");
     }
     names
 }
@@ -151,7 +170,24 @@ pub fn plan(probe: &Probe) -> Option<Plan> {
     if !probe.python {
         packages.push(manager.python_package().to_string());
     }
+    if !probe.bash {
+        packages.push("bash".to_string());
+    }
+    if !probe.awk {
+        packages.push("gawk".to_string());
+    }
     (!packages.is_empty()).then_some(Plan { manager, packages })
+}
+
+fn english_list<T: AsRef<str>>(items: &[T]) -> String {
+    match items {
+        [] => String::new(),
+        [only] => only.as_ref().to_string(),
+        [rest @ .., last] => {
+            let head: Vec<&str> = rest.iter().map(AsRef::as_ref).collect();
+            format!("{} and {}", head.join(", "), last.as_ref())
+        }
+    }
 }
 
 pub fn describe_missing(names: &[&str]) -> String {
@@ -159,7 +195,9 @@ pub fn describe_missing(names: &[&str]) -> String {
         [] => String::new(),
         [XDG_PACKAGE] => "xdg-utils isn't installed, so links opened there can't reach linkgate.".into(),
         ["python3"] => "python3 isn't installed, and linkgate-open needs it.".into(),
-        _ => format!("{} aren't installed, so linkgate can't work there.", names.join(" and ")),
+        ["bash"] => "bash isn't installed, and linkgate-open is a bash script.".into(),
+        ["awk"] => "awk isn't installed, and xdg-mime needs it.".into(),
+        _ => format!("{} aren't installed, so linkgate can't work there.", english_list(names)),
     }
 }
 
@@ -198,7 +236,7 @@ pub fn readiness(result: Result<Probe, String>) -> Readiness {
         Some(plan) => Readiness {
             issue,
             offer: Some(Offer {
-                label: format!("Install {} for me", plan.packages.join(" and ")),
+                label: format!("Install {} for me", english_list(&plan.packages)),
                 command: format!("{} (runs as root)", plan.manager.install_words(&plan.packages).join(" ")),
             }),
             ..Readiness::default()
@@ -473,7 +511,7 @@ mod tests {
     fn missing_xdg() -> Probe {
         Probe {
             xdg: false,
-            python: true,
+            python: true, bash: true, awk: true,
             manager: Some(Manager::Apt),
         }
     }
@@ -485,7 +523,7 @@ mod tests {
             ubuntu,
             Probe {
                 xdg: true,
-                python: true,
+                python: true, bash: true, awk: true,
                 manager: Some(Manager::Apt)
             }
         );
@@ -507,7 +545,7 @@ mod tests {
         assert_eq!(plan(&missing_xdg()).unwrap().packages, vec!["xdg-utils"]);
         let both = Probe {
             xdg: false,
-            python: false,
+            python: false, bash: true, awk: true,
             manager: Some(Manager::Pacman),
         };
         assert_eq!(plan(&both).unwrap().packages, vec!["xdg-utils", "python"]);
@@ -519,7 +557,7 @@ mod tests {
         assert_eq!(
             plan(&Probe {
                 xdg: true,
-                python: true,
+                python: true, bash: true, awk: true,
                 manager: Some(Manager::Apt)
             }),
             None
@@ -558,12 +596,26 @@ mod tests {
     }
 
     #[test]
-    fn apt_runs_non_interactively_and_others_run_as_they_are() {
-        let argv = Manager::Apt.argv(Manager::Apt.install_words(&["xdg-utils".to_string()]));
-        assert_eq!(&argv[..3], ["env", "DEBIAN_FRONTEND=noninteractive", "apt-get"]);
-        assert_eq!(Manager::Dnf.argv(vec!["dnf".into()]), vec!["dnf"]);
-        assert!(Manager::Apt.update_argv().is_some());
-        assert!(Manager::Dnf.update_argv().is_none());
+    fn every_command_runs_with_the_system_directories_on_its_path() {
+        let path = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+        for manager in [Manager::Apt, Manager::Dnf, Manager::Pacman, Manager::Zypper, Manager::Apk] {
+            let argv = manager.argv(manager.install_words(&["xdg-utils".to_string()]));
+            assert_eq!(&argv[..2], ["env", path], "{manager:?}");
+        }
+        let apt = Manager::Apt.argv(Manager::Apt.install_words(&["xdg-utils".to_string()]));
+        assert_eq!(&apt[2..4], ["DEBIAN_FRONTEND=noninteractive", "apt-get"]);
+        let dnf = Manager::Dnf.argv(Manager::Dnf.install_words(&["xdg-utils".to_string()]));
+        assert_eq!(dnf[2], "dnf");
+    }
+
+    #[test]
+    fn managers_that_need_fresh_package_lists_know_how_to_refresh_them() {
+        let refresh = |manager: Manager| manager.update_argv().map(|argv| argv[2..].join(" "));
+        assert_eq!(refresh(Manager::Apt).as_deref(), Some("DEBIAN_FRONTEND=noninteractive apt-get update -q"));
+        assert_eq!(refresh(Manager::Pacman).as_deref(), Some("pacman -Sy --noconfirm"));
+        assert_eq!(refresh(Manager::Zypper).as_deref(), Some("zypper --non-interactive refresh"));
+        assert_eq!(refresh(Manager::Apk).as_deref(), Some("apk update"));
+        assert_eq!(refresh(Manager::Dnf), None);
     }
 
     #[test]
@@ -589,7 +641,7 @@ mod tests {
     fn readiness_is_empty_when_nothing_is_missing() {
         let probe = Probe {
             xdg: true,
-            python: true,
+            python: true, bash: true, awk: true,
             manager: Some(Manager::Apt),
         };
         assert_eq!(readiness(Ok(probe)), Readiness::default());
@@ -599,7 +651,7 @@ mod tests {
     fn readiness_without_a_manager_gives_manual_advice_and_no_offer() {
         let ready = readiness(Ok(Probe {
             xdg: false,
-            python: true,
+            python: true, bash: true, awk: true,
             manager: None,
         }));
         assert!(ready.offer.is_none());
@@ -638,7 +690,7 @@ mod tests {
         );
         assert_eq!(
             fake.lines(),
-            vec!["env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xdg-utils"]
+            vec!["env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xdg-utils"]
         );
     }
 
@@ -646,7 +698,7 @@ mod tests {
     fn ensure_does_nothing_when_everything_is_present() {
         let probe = Probe {
             xdg: true,
-            python: true,
+            python: true, bash: true, awk: true,
             manager: Some(Manager::Apt),
         };
         let fake = Fake::new(Ok(probe), vec![]);
@@ -696,7 +748,7 @@ mod tests {
     fn ensure_does_not_retry_for_managers_without_a_refresh_step() {
         let probe = Probe {
             xdg: false,
-            python: true,
+            python: true, bash: true, awk: true,
             manager: Some(Manager::Dnf),
         };
         let fake = Fake::new(Ok(probe), vec![Err("No match for argument: xdg-utils".into())]);
@@ -709,7 +761,7 @@ mod tests {
     fn ensure_explains_a_distro_with_no_known_manager() {
         let probe = Probe {
             xdg: false,
-            python: true,
+            python: true, bash: true, awk: true,
             manager: None,
         };
         let fake = Fake::new(Ok(probe), vec![]);
@@ -732,7 +784,7 @@ mod tests {
             packages: vec!["xdg-utils".into()],
         };
         remove(&fake, "Debian", &record).unwrap();
-        assert_eq!(fake.lines(), vec!["env DEBIAN_FRONTEND=noninteractive apt-get remove -y xdg-utils"]);
+        assert_eq!(fake.lines(), vec!["env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin DEBIAN_FRONTEND=noninteractive apt-get remove -y xdg-utils"]);
     }
 
     #[test]
@@ -775,12 +827,61 @@ mod tests {
     }
 
     #[test]
+    fn bash_and_awk_are_probed_and_installed_when_missing() {
+        let bare = parse_probe("xdg=1\npython=1\nbash=0\nawk=0\nmanager=apk\n").unwrap();
+        assert!(!bare.bash && !bare.awk);
+        assert_eq!(missing_names(&bare), vec!["bash", "awk"]);
+        assert_eq!(plan(&bare).unwrap().packages, vec!["bash", "gawk"]);
+        let older = parse_probe("xdg=1\npython=1\nmanager=apt-get\n").unwrap();
+        assert!(older.bash && older.awk);
+        assert!(missing_names(&older).is_empty());
+    }
+
+    #[test]
+    fn lists_of_missing_tools_read_as_plain_english() {
+        assert_eq!(
+            describe_missing(&["xdg-utils", "python3", "bash", "awk"]),
+            "xdg-utils, python3, bash and awk aren't installed, so linkgate can't work there."
+        );
+        assert!(describe_missing(&["bash"]).contains("bash script"));
+        assert!(describe_missing(&["awk"]).contains("xdg-mime needs it"));
+        assert_eq!(english_list(&["a".to_string(), "b".to_string(), "c".to_string()]), "a, b and c");
+    }
+
+    #[test]
     fn shim_folders_must_be_plain_absolute_paths() {
         assert!(valid_shim("/tmp/linkgate-shim_1.x"));
         assert!(!valid_shim("tmp/shim"));
         assert!(!valid_shim("/tmp/a b"));
         assert!(!valid_shim("/tmp/$(x)"));
         assert!(!valid_shim(""));
+    }
+
+    #[test]
+    #[ignore = "installs and removes real packages in a throwaway distro, set LINKGATE_SETUP_TEST_DISTRO to a name starting with lg-test-"]
+    fn a_throwaway_distro_installs_and_removes_its_packages() {
+        let distro = std::env::var("LINKGATE_SETUP_TEST_DISTRO").expect("LINKGATE_SETUP_TEST_DISTRO");
+        assert!(distro.starts_with("lg-test-"), "refusing to change packages in {distro}");
+        let runner = WslRunner { shim: None };
+
+        let before = runner.probe(&distro).unwrap();
+        println!("before: {before:?}");
+        assert!(!missing_names(&before).is_empty(), "the distro should start without xdg-utils");
+
+        let record = match ensure(&runner, &distro).unwrap() {
+            InstallOutcome::Installed(record) => record,
+            InstallOutcome::AlreadyPresent => panic!("nothing was installed"),
+        };
+        println!("installed: {record:?}");
+        let after = runner.probe(&distro).unwrap();
+        println!("after: {after:?}");
+        assert!(missing_names(&after).is_empty());
+        assert_eq!(ensure(&runner, &distro).unwrap(), InstallOutcome::AlreadyPresent);
+
+        remove(&runner, &distro, &record).unwrap();
+        let removed = runner.probe(&distro).unwrap();
+        println!("removed: {removed:?}");
+        assert!(!removed.xdg);
     }
 
     #[test]
