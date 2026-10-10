@@ -20,6 +20,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: pnpm --filter linkgate-setup build
 
   rust:
     runs-on: windows-latest
@@ -35,17 +36,24 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            src-tauri
+            installer/src-tauri
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: cargo clippy --all-targets -- -D warnings
         working-directory: src-tauri
       - run: cargo test
         working-directory: src-tauri
+      - run: pnpm --filter linkgate-setup build
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: installer/src-tauri
+      - run: cargo test
+        working-directory: installer/src-tauri
 
   handler:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - run: bash -n linux/linkgate-open scripts/install.sh scripts/test-windows.sh
-      - run: shellcheck --severity=warning linux/linkgate-open scripts/install.sh scripts/test-windows.sh
+      - run: bash -n linux/linkgate-open scripts/install.sh scripts/test-windows.sh installer/scripts/test-windows.sh
+      - run: shellcheck --severity=warning linux/linkgate-open scripts/install.sh scripts/test-windows.sh installer/scripts/test-windows.sh

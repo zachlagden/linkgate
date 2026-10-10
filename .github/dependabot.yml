@@ -21,3 +21,10 @@ updates:
       interval: weekly
     labels:
       - maintenance
+
+  - package-ecosystem: cargo
+    directory: /installer/src-tauri
+    schedule:
+      interval: weekly
+    labels:
+      - maintenance
