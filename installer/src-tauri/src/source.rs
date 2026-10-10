@@ -1,15 +1,17 @@
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Deserialize;
+
+use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
 use crate::paths::SOURCE_ENV;
 
 const LATEST_URL: &str = "https://api.github.com/repos/zachlagden/linkgate/releases/latest";
 const MAX_DOWNLOAD: u64 = 100 * 1024 * 1024;
 const CHUNK: usize = 64 * 1024;
+const DOWNLOAD_TIMEOUT_SECS: u64 = 600;
 
 #[derive(Clone, Debug)]
 pub enum Source {
@@ -68,24 +70,45 @@ pub fn parse_release(json: &str) -> Result<Release, String> {
     })
 }
 
-fn agent() -> Result<ureq::Agent, String> {
-    let tls = native_tls::TlsConnector::new().map_err(|e| format!("Couldn't set up a secure connection: {e}"))?;
-    Ok(ureq::AgentBuilder::new()
-        .tls_connector(Arc::new(tls))
-        .timeout_connect(Duration::from_secs(15))
-        .timeout_read(Duration::from_secs(60))
+fn agent() -> ureq::Agent {
+    let tls = TlsConfig::builder()
+        .provider(TlsProvider::NativeTls)
+        .root_certs(RootCerts::PlatformVerifier)
+        .build();
+    ureq::Agent::config_builder()
+        .tls_config(tls)
+        .http_status_as_error(false)
+        .timeout_connect(Some(Duration::from_secs(15)))
+        .timeout_recv_response(Some(Duration::from_secs(60)))
+        .timeout_recv_body(Some(Duration::from_secs(DOWNLOAD_TIMEOUT_SECS)))
         .user_agent(concat!("linkgate-setup/", env!("CARGO_PKG_VERSION")))
-        .build())
+        .build()
+        .into()
 }
 
-fn explain(error: ureq::Error) -> String {
-    match error {
-        ureq::Error::Status(404, _) => "GitHub has no published linkgate release yet.".to_string(),
-        ureq::Error::Status(403 | 429, _) => {
-            "GitHub is limiting requests from this connection. Wait a while and try again.".to_string()
-        }
-        ureq::Error::Status(code, _) => format!("GitHub answered with status {code}."),
-        ureq::Error::Transport(transport) => format!("Couldn't reach GitHub: {transport}"),
+fn explain_status(status: u16) -> String {
+    match status {
+        404 => "GitHub has no published linkgate release yet.".to_string(),
+        403 | 429 => "GitHub is limiting requests from this connection. Wait a while and try again.".to_string(),
+        code => format!("GitHub answered with status {code}."),
+    }
+}
+
+fn explain_transport(error: ureq::Error) -> String {
+    format!("Couldn't reach GitHub: {error}")
+}
+
+fn get(url: &str, accept: Option<&str>) -> Result<ureq::http::Response<ureq::Body>, String> {
+    let mut request = agent().get(url);
+    if let Some(accept) = accept {
+        request = request.header("Accept", accept);
+    }
+    let response = request.call().map_err(explain_transport)?;
+    let status = response.status().as_u16();
+    if (200..300).contains(&status) {
+        Ok(response)
+    } else {
+        Err(explain_status(status))
     }
 }
 
@@ -100,12 +123,9 @@ impl Source {
     pub fn latest(&self) -> Result<Release, String> {
         match self {
             Source::Github => {
-                let body = agent()?
-                    .get(LATEST_URL)
-                    .set("Accept", "application/vnd.github+json")
-                    .call()
-                    .map_err(explain)?
-                    .into_string()
+                let body = get(LATEST_URL, Some("application/vnd.github+json"))?
+                    .body_mut()
+                    .read_to_string()
                     .map_err(|e| format!("Couldn't read GitHub's answer: {e}"))?;
                 parse_release(&body)
             }
@@ -154,12 +174,16 @@ impl Source {
 }
 
 fn download(url: &str, name: &str, on_progress: &mut dyn FnMut(u64, Option<u64>)) -> Result<Vec<u8>, String> {
-    let response = agent()?.get(url).call().map_err(explain)?;
-    let total = response.header("Content-Length").and_then(|value| value.parse::<u64>().ok());
+    let mut response = get(url, None)?;
+    let total = response
+        .headers()
+        .get("content-length")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
     if total.is_some_and(|size| size > MAX_DOWNLOAD) {
         return Err(format!("{name} is larger than the installer will download."));
     }
-    let mut reader = response.into_reader().take(MAX_DOWNLOAD + 1);
+    let mut reader = response.body_mut().as_reader().take(MAX_DOWNLOAD + 1);
     let mut bytes = Vec::with_capacity(total.unwrap_or(0) as usize);
     let mut buffer = vec![0u8; CHUNK];
     loop {
