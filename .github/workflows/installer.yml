@@ -1,0 +1,94 @@
+name: Installer refresh
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "installer/**"
+      - "linux/**"
+      - ".github/workflows/installer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build linkgate-setup.exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: installer/src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter linkgate-setup exec tauri build --no-bundle
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linkgate-setup
+          path: installer/src-tauri/target/release/linkgate-setup.exe
+          if-no-files-found: error
+
+  refresh:
+    name: Replace the installer on the latest release
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    concurrency:
+      group: release-assets
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: linkgate-setup
+          path: dist
+
+      - name: Find the latest release
+        id: latest
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          if [ -z "$tag" ]; then
+            echo "::notice::There is no release yet, so there is nothing to refresh."
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Download the release's SHA256SUMS
+        if: steps.latest.outputs.tag != ''
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir dist
+
+      - name: Replace the linkgate-setup.exe line in SHA256SUMS
+        if: steps.latest.outputs.tag != ''
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          grep -v -E ' \*?linkgate-setup\.exe\r?$' SHA256SUMS > SHA256SUMS.new || true
+          sha256sum linkgate-setup.exe >> SHA256SUMS.new
+          mv SHA256SUMS.new SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest the new linkgate-setup.exe
+        if: steps.latest.outputs.tag != ''
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/linkgate-setup.exe
+
+      - name: Upload linkgate-setup.exe and SHA256SUMS to the release
+        if: steps.latest.outputs.tag != ''
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" dist/linkgate-setup.exe dist/SHA256SUMS --clobber
