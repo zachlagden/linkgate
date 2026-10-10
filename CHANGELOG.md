@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Added
 
 - `linkgate-setup.exe`, an installer that downloads the latest release, checks it against `SHA256SUMS` and installs it. It adds a Start menu shortcut and an optional desktop shortcut, sets up the WSL handler for each distribution you tick, and can set the VS Code link settings. Running it again updates, and Windows Settings can uninstall it.
@@ -18,6 +20,10 @@
 - `xdg-open` on a PDF, PNG, JPEG, GIF, WebP or SVG file shows the picker, with the WSL path converted to its Windows `file:` link.
 - Network file links open in Firefox, which needs five slashes for `wsl.localhost` paths.
 - `linkgate-open` accepts `file://` links to WSL paths and percent-encodes special characters in converted paths.
+
+### Fixed
+
+- A `settings.json` that starts with a byte order mark, as PowerShell 5 and Notepad write it, loads instead of resetting every setting.
 
 ## [0.1.0]
 
