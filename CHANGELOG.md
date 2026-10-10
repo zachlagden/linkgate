@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The installer checks downloads against the SHA256 digest GitHub publishes for each release file, so new releases no longer include a `SHA256SUMS` file. It still reads `SHA256SUMS` from releases that have one, and it refuses to install a file it can't check.
+
 ### Added
 
 - The installer checks each WSL distribution for `xdg-utils` and `python3`, and offers to install what is missing with `apt-get`, `dnf`, `pacman`, `zypper` or `apk`, as root and only when you leave the box ticked. Uninstalling offers to remove only the packages the installer added.
