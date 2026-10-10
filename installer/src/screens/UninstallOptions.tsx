@@ -12,6 +12,7 @@ interface UninstallOptionsProps {
 
 export function UninstallOptions({ state, choices, onChoices, onUninstall, onCancel }: UninstallOptionsProps): ReactElement {
   const previous = state.previous;
+  const installedPackages = previous?.installedPackages ?? [];
   const vscodeLabels = (previous?.vscode ?? []).map(
     (id) => state.vscode.find((target) => target.id === id)?.label ?? id,
   );
@@ -49,6 +50,23 @@ export function UninstallOptions({ state, choices, onChoices, onUninstall, onCan
             checked={choices.removeData}
             onChange={(on) => onChoices({ ...choices, removeData: on })}
           />
+          {installedPackages.map((item) => (
+            <ChoiceRow
+              key={item.distro}
+              title={`Remove ${item.packages.join(" and ")} from ${item.distro}`}
+              detail="linkgate installed it. Other programs there may use it too."
+              first={false}
+              checked={choices.removePackages.includes(item.distro)}
+              onChange={(on) =>
+                onChoices({
+                  ...choices,
+                  removePackages: on
+                    ? [...choices.removePackages.filter((name) => name !== item.distro), item.distro]
+                    : choices.removePackages.filter((name) => name !== item.distro),
+                })
+              }
+            />
+          ))}
           {vscodeLabels.length > 0 && (
             <ChoiceRow
               title="Restore VS Code settings"

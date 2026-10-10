@@ -4,6 +4,7 @@ import {
   errorMessage,
   type InitialState,
   type InstallChoices,
+  type Readiness,
   type StepPlan,
   type StepResult,
   type StepStatus,
@@ -30,12 +31,19 @@ function defaultChoices(state: InitialState): InstallChoices {
     return {
       desktopShortcut: previous.desktopShortcut,
       wslDistros: previous.wsl.filter((name) => distroNames.includes(name)),
+      installPackages: [],
       browserEnv: previous.browserEnv,
       vscode: previous.vscode.filter((id) => state.vscode.some((target) => target.id === id && target.available)),
     };
   }
   const preferred = state.wsl.distros.find((distro) => distro.isDefault);
-  return { desktopShortcut: false, wslDistros: preferred ? [preferred.name] : [], browserEnv: "off", vscode: [] };
+  return {
+    desktopShortcut: false,
+    wslDistros: preferred ? [preferred.name] : [],
+    installPackages: [],
+    browserEnv: "off",
+    vscode: [],
+  };
 }
 
 function rowsFrom(plan: StepPlan[], states: Record<string, StepState>, summary: Summary | null): StepRowData[] {
@@ -60,7 +68,12 @@ export function App(): ReactElement {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [latest, setLatest] = useState<Latest>({ state: "checking" });
   const [choices, setChoices] = useState<InstallChoices | null>(null);
-  const [uninstallChoices, setUninstallChoices] = useState<UninstallChoices>({ restoreVscode: false, removeData: false });
+  const [readiness, setReadiness] = useState<Record<string, Readiness> | null>(null);
+  const [uninstallChoices, setUninstallChoices] = useState<UninstallChoices>({
+    restoreVscode: false,
+    removeData: false,
+    removePackages: [],
+  });
   const [screen, setScreen] = useState<Screen>("options");
   const [plan, setPlan] = useState<StepPlan[]>([]);
   const [stepStates, setStepStates] = useState<Record<string, StepState>>({});
@@ -86,6 +99,30 @@ export function App(): ReactElement {
       (failure) => setLoadError(errorMessage(failure)),
     );
   }, [checkLatest]);
+
+  useEffect(() => {
+    if (state === null) return;
+    if (state.mode === "uninstall" || state.wsl.distros.length === 0) {
+      setReadiness({});
+      return;
+    }
+    let current = true;
+    api.probeDistros(state.wsl.distros.map((distro) => distro.name)).then(
+      (results) => {
+        if (!current) return;
+        setReadiness(Object.fromEntries(results.map((result) => [result.name, result.readiness])));
+        const offered = results.filter((result) => result.readiness.offer !== null).map((result) => result.name);
+        setChoices((existing) => (existing ? { ...existing, installPackages: offered } : existing));
+      },
+      (failure) => {
+        console.error(errorMessage(failure));
+        if (current) setReadiness({});
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [state]);
 
   useEffect(() => {
     if (state !== null || loadError !== null) void api.present();
@@ -139,6 +176,7 @@ export function App(): ReactElement {
           state={state}
           latest={latest}
           choices={choices}
+          readiness={readiness}
           onChoices={setChoices}
           onRetry={checkLatest}
           onInstall={() => void run(() => api.runInstall(choices))}

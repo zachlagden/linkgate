@@ -16,6 +16,28 @@ export interface WslStatus {
   note: string | null;
 }
 
+export interface Offer {
+  label: string;
+  command: string;
+}
+
+export interface Readiness {
+  issue: string | null;
+  offer: Offer | null;
+  manual: string | null;
+  probeError: string | null;
+}
+
+export interface DistroReadiness {
+  name: string;
+  readiness: Readiness;
+}
+
+export interface InstalledPackages {
+  distro: string;
+  packages: string[];
+}
+
 export interface VsCodeView {
   id: string;
   label: string;
@@ -28,6 +50,7 @@ export interface Previous {
   wsl: string[];
   vscode: string[];
   browserEnv: BrowserEnv;
+  installedPackages: InstalledPackages[];
 }
 
 export interface InitialState {
@@ -47,6 +70,7 @@ export interface InitialState {
 export interface InstallChoices {
   desktopShortcut: boolean;
   wslDistros: string[];
+  installPackages: string[];
   browserEnv: BrowserEnv;
   vscode: string[];
 }
@@ -54,6 +78,7 @@ export interface InstallChoices {
 export interface UninstallChoices {
   restoreVscode: boolean;
   removeData: boolean;
+  removePackages: string[];
 }
 
 export interface StepPlan {
@@ -82,6 +107,7 @@ export type ProgressEvent =
 export const api = {
   initialState: (): Promise<InitialState> => invoke("initial_state"),
   checkLatest: (): Promise<{ version: string }> => invoke("check_latest"),
+  probeDistros: (names: string[]): Promise<DistroReadiness[]> => invoke("probe_distros", { names }),
   runInstall: (choices: InstallChoices): Promise<Summary> => invoke("run_install", { choices }),
   runUninstall: (choices: UninstallChoices): Promise<Summary> => invoke("run_uninstall", { choices }),
   copyText: (text: string): Promise<void> => invoke("copy_text", { text }),
