@@ -117,23 +117,25 @@ fn parse_release(body: &str) -> Result<Version, String> {
     Version::parse(tag).ok_or_else(|| "the release tag is not a version number".to_string())
 }
 
-fn fetch_latest(agent: &ureq::Agent) -> Result<Option<Version>, String> {
-    match agent
-        .get(LATEST_RELEASE_API)
-        .set("Accept", "application/vnd.github+json")
+fn fetch_latest(agent: &ureq::Agent, url: &str) -> Result<Option<Version>, String> {
+    let mut response = agent
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
         .call()
-    {
-        Ok(response) => {
+        .map_err(|e| e.to_string())?;
+    match response.status().as_u16() {
+        404 => Ok(None),
+        200..=299 => {
             let mut body = String::new();
             response
-                .into_reader()
+                .body_mut()
+                .as_reader()
                 .take(MAX_RESPONSE_BYTES)
                 .read_to_string(&mut body)
                 .map_err(|e| e.to_string())?;
             parse_release(&body).map(Some)
         }
-        Err(ureq::Error::Status(404, _)) => Ok(None),
-        Err(error) => Err(error.to_string()),
+        status => Err(format!("GitHub answered with status {status}")),
     }
 }
 
@@ -142,9 +144,9 @@ pub fn check() -> Result<(), String> {
     let Some(_lock) = lock::acquire(&lock_path(), LOCK_STALE_SECS) else {
         return Err("A check is already running.".into());
     };
-    let agent = net::agent(CHECK_TIMEOUT)?;
+    let agent = net::agent(CHECK_TIMEOUT);
     let mut meta = read_meta();
-    match fetch_latest(&agent) {
+    match fetch_latest(&agent, LATEST_RELEASE_API) {
         Ok(latest) => {
             meta.latest = latest.map(|version| version.to_string());
             meta.last_error = None;
@@ -184,6 +186,20 @@ mod tests {
 
     fn parse(text: &str) -> Option<String> {
         Version::parse(text).map(|v| v.to_string())
+    }
+
+    #[test]
+    #[ignore = "needs network access"]
+    fn reads_a_real_release_and_treats_a_missing_one_as_none() {
+        let agent = net::agent(CHECK_TIMEOUT);
+        let found = fetch_latest(&agent, LATEST_RELEASE_API).unwrap();
+        assert!(found.is_some());
+        let missing = fetch_latest(
+            &agent,
+            "https://api.github.com/repos/zachlagden/linkgate-no-such-repo/releases/latest",
+        )
+        .unwrap();
+        assert!(missing.is_none());
     }
 
     #[test]
