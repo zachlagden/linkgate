@@ -8,6 +8,7 @@ use crate::checksums;
 use crate::fsutil;
 use crate::jsonc;
 use crate::logging;
+use crate::packages::{self, InstallOutcome, WslRunner};
 use crate::paths::{Locations, VsCodeTarget};
 use crate::progress::{Event, StepPlan, Steps, Summary};
 use crate::registry;
@@ -36,6 +37,8 @@ pub struct InstallChoices {
     pub desktop_shortcut: bool,
     #[serde(default)]
     pub wsl_distros: Vec<String>,
+    #[serde(default)]
+    pub install_packages: Vec<String>,
     #[serde(default)]
     pub browser_env: BrowserEnv,
     #[serde(default)]
@@ -79,6 +82,12 @@ fn plan(locations: &Locations, choices: &InstallChoices) -> Vec<StepPlan> {
         steps.push(step("desktop", "Add a desktop shortcut"));
     }
     for distro in &choices.wsl_distros {
+        if choices.install_packages.contains(distro) {
+            steps.push(step(
+                format!("packages:{distro}"),
+                format!("Install {} in {distro}", packages::XDG_PACKAGE),
+            ));
+        }
         steps.push(step(format!("wsl:{distro}"), format!("Set up WSL: {distro}")));
     }
     for id in &choices.vscode {
@@ -133,8 +142,25 @@ fn keep_setup_copy(ctx: &Context, fetched: &Fetched) -> Result<Option<String>, S
     Ok(Some("The installer was refreshed from the release.".into()))
 }
 
-fn valid_distro(name: &str) -> bool {
+pub fn valid_distro(name: &str) -> bool {
     !name.is_empty() && !name.starts_with('-') && !name.chars().any(char::is_control)
+}
+
+fn package_runner(ctx: &Context) -> Result<WslRunner, String> {
+    if ctx.locations.is_sandboxed() && ctx.locations.package_shim.is_none() {
+        return Err("Package installs are turned off in test mode.".into());
+    }
+    Ok(WslRunner {
+        shim: ctx.locations.package_shim.clone(),
+    })
+}
+
+fn install_packages(ctx: &Context, distro: &str) -> Result<InstallOutcome, String> {
+    if !valid_distro(distro) {
+        return Err(format!("{distro:?} isn't a usable WSL distribution name."));
+    }
+    let runner = package_runner(ctx)?;
+    packages::ensure(&runner, distro)
 }
 
 fn set_up_wsl(ctx: &Context, distro: &str, env: BrowserEnv) -> Result<Option<String>, String> {
@@ -310,13 +336,45 @@ pub fn run(ctx: &Context, choices: &InstallChoices, report: &mut dyn FnMut(Event
     }
 
     for distro in &choices.wsl_distros {
+        let existing = record.wsl.iter().find(|r| &r.distro == distro).cloned();
+        let mut added = None;
+        let mut packages_ready = true;
+        if choices.install_packages.contains(distro) {
+            let id = format!("packages:{distro}");
+            steps.start(&id);
+            match install_packages(ctx, distro) {
+                Ok(InstallOutcome::Installed(done)) => {
+                    steps.finish(&id, Ok(Some(format!("Installed {}.", done.packages.join(" and ")))));
+                    added = Some(done);
+                }
+                Ok(InstallOutcome::AlreadyPresent) => {
+                    steps.finish(&id, Ok(Some("Already installed, so nothing was changed.".into())));
+                }
+                Err(error) => {
+                    steps.finish(&id, Err(error));
+                    packages_ready = false;
+                }
+            }
+        }
         let id = format!("wsl:{distro}");
         steps.start(&id);
-        let done = steps.finish(&id, set_up_wsl(ctx, distro, choices.browser_env));
-        if done {
+        let done = if packages_ready {
+            steps.finish(&id, set_up_wsl(ctx, distro, choices.browser_env))
+        } else {
+            steps.finish(&id, Err(format!("Skipped, because {distro} is still missing packages linkgate needs.")))
+        };
+        let installed_packages =
+            packages::merge_records(existing.as_ref().and_then(|r| r.installed_packages.as_ref()), added.clone());
+        if done || added.is_some() {
+            let browser_env_file = if done {
+                choices.browser_env.file_name().map(str::to_string)
+            } else {
+                existing.and_then(|r| r.browser_env_file)
+            };
             let item = WslRecord {
                 distro: distro.clone(),
-                browser_env_file: choices.browser_env.file_name().map(str::to_string),
+                browser_env_file,
+                installed_packages,
             };
             upsert(&mut record.wsl, item, |r| &r.distro == distro);
         }

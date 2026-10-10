@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 pub const SANDBOX_ENV: &str = "LINKGATE_SETUP_SANDBOX";
 pub const SOURCE_ENV: &str = "LINKGATE_SETUP_SOURCE";
+pub const PACKAGE_SHIM_ENV: &str = "LINKGATE_SETUP_PACKAGE_SHIM";
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\linkgate";
 const SANDBOX_KEY_ROOT: &str = r"Software\LinkgateSetupSandbox";
 const SANDBOX_WSL_HOME: &str = "/tmp/linkgate-setup-sandbox";
@@ -29,6 +30,7 @@ pub struct Locations {
     pub vscode: Vec<VsCodeTarget>,
     pub uninstall_key: String,
     pub wsl_home: Option<String>,
+    pub package_shim: Option<String>,
     pub child_local_app_data: Option<PathBuf>,
 }
 
@@ -99,6 +101,7 @@ impl Locations {
             vscode: vscode_targets(&roaming),
             uninstall_key: UNINSTALL_KEY.to_string(),
             wsl_home: None,
+            package_shim: None,
             child_local_app_data: None,
         })
     }
@@ -116,6 +119,7 @@ impl Locations {
             vscode: vscode_targets(&roaming),
             uninstall_key: format!(r"{SANDBOX_KEY_ROOT}\{name}"),
             wsl_home: Some(SANDBOX_WSL_HOME.to_string()),
+            package_shim: std::env::var(PACKAGE_SHIM_ENV).ok().filter(|value| !value.is_empty()),
             child_local_app_data: Some(local),
         }
     }

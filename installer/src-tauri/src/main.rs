@@ -9,6 +9,7 @@ mod headless;
 mod install;
 mod jsonc;
 mod logging;
+mod packages;
 mod paths;
 mod progress;
 mod registry;
@@ -70,6 +71,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::initial_state,
             commands::check_latest,
+            commands::probe_distros,
             commands::run_install,
             commands::run_uninstall,
             commands::copy_text,

@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::distros::{self, WslStatus};
 use crate::install::{self, Context, InstallChoices};
+use crate::packages::{self, Readiness};
 use crate::paths::Locations;
 use crate::progress::{Event, Summary};
 use crate::source::Source;
@@ -46,11 +47,25 @@ pub struct VsCodeView {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct InstalledPackages {
+    distro: String,
+    packages: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Previous {
     desktop_shortcut: bool,
     wsl: Vec<String>,
     vscode: Vec<String>,
     browser_env: BrowserEnv,
+    installed_packages: Vec<InstalledPackages>,
+}
+
+#[derive(Serialize)]
+pub struct DistroReadiness {
+    name: String,
+    readiness: Readiness,
 }
 
 #[derive(Serialize)]
@@ -94,6 +109,16 @@ pub async fn initial_state(state: State<'_, AppState>) -> Result<InitialState, S
         wsl: record.wsl.iter().map(|item| item.distro.clone()).collect(),
         vscode: record.vscode.iter().map(|item| item.id.clone()).collect(),
         browser_env: browser_env_of(record.wsl.iter().find_map(|item| item.browser_env_file.as_deref())),
+        installed_packages: record
+            .wsl
+            .iter()
+            .filter_map(|item| {
+                item.installed_packages.as_ref().map(|added| InstalledPackages {
+                    distro: item.distro.clone(),
+                    packages: added.packages.clone(),
+                })
+            })
+            .collect(),
     });
     Ok(InitialState {
         mode: state.mode,
@@ -117,6 +142,18 @@ pub async fn initial_state(state: State<'_, AppState>) -> Result<InitialState, S
         browser_line: wsl::BROWSER_LINE,
         alternatives_command: wsl::ALTERNATIVES_COMMAND,
     })
+}
+
+#[tauri::command]
+pub async fn probe_distros(names: Vec<String>) -> Result<Vec<DistroReadiness>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        packages::probe_all(&names)
+            .into_iter()
+            .map(|(name, readiness)| DistroReadiness { name, readiness })
+            .collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
