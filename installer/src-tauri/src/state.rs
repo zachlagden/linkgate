@@ -6,10 +6,19 @@ use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct PackageRecord {
+    pub manager: String,
+    pub packages: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WslRecord {
     pub distro: String,
     #[serde(default)]
     pub browser_env_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_packages: Option<PackageRecord>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
@@ -69,10 +78,21 @@ mod tests {
             install_dir: r"C:\Users\Alex\AppData\Local\Programs\linkgate".into(),
             start_menu_shortcut: true,
             desktop_shortcut: false,
-            wsl: vec![WslRecord {
-                distro: "Ubuntu".into(),
-                browser_env_file: Some(".zshenv".into()),
-            }],
+            wsl: vec![
+                WslRecord {
+                    distro: "Ubuntu".into(),
+                    browser_env_file: Some(".zshenv".into()),
+                    installed_packages: None,
+                },
+                WslRecord {
+                    distro: "Debian".into(),
+                    browser_env_file: None,
+                    installed_packages: Some(PackageRecord {
+                        manager: "apt-get".into(),
+                        packages: vec!["xdg-utils".into()],
+                    }),
+                },
+            ],
             vscode: vec![VsCodeRecord {
                 id: "code".into(),
                 settings_path: r"C:\Users\Alex\AppData\Roaming\Code\User\settings.json".into(),
@@ -91,6 +111,31 @@ mod tests {
         assert_eq!(load(&dir.join("absent.json")), None);
         std::fs::write(dir.join("broken.json"), "{ not json").unwrap();
         assert_eq!(load(&dir.join("broken.json")), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn records_without_package_fields_load_with_none() {
+        let dir = temp("nopkg");
+        std::fs::create_dir_all(&dir).unwrap();
+        let json = r#"{"version":"0.2.0","installDir":"C:\\x","wsl":[{"distro":"Ubuntu","browserEnvFile":".zshenv"}]}"#;
+        std::fs::write(dir.join("install.json"), json).unwrap();
+        let record = load(&dir.join("install.json")).unwrap();
+        assert_eq!(record.wsl[0].installed_packages, None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn packages_are_written_only_when_the_installer_added_them() {
+        let dir = temp("write");
+        let path = dir.join("install.json");
+        let mut record = InstallRecord::default();
+        record.wsl.push(WslRecord {
+            distro: "Ubuntu".into(),
+            ..WslRecord::default()
+        });
+        save(&path, &record).unwrap();
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("installedPackages"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

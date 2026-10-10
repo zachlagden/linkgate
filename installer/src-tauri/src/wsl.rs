@@ -122,7 +122,9 @@ if [ -f "$mime_file" ]; then sed -i '/=linkgate\.desktop$/d' "$mime_file"; fi
 
 pub fn explain_exit(code: Option<i32>, stderr: &str, distro: &str) -> String {
     match code {
-        Some(EXIT_NO_XDG) => format!("{distro} has no xdg-utils. Run sudo apt install xdg-utils in it, then try again."),
+        Some(EXIT_NO_XDG) => format!(
+            "{distro} has no xdg-utils. Tick the option to install it, or install xdg-utils in {distro} yourself, then try again."
+        ),
         Some(EXIT_NO_PYTHON) => format!("{distro} has no python3, which linkgate-open needs. Install it, then try again."),
         Some(EXIT_NO_WSLPATH) => format!("{distro} couldn't convert the Windows path to a Linux path with wslpath."),
         _ => {

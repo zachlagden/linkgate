@@ -334,6 +334,7 @@ fn uninstalling_restores_vscode_and_removes_everything_the_installer_made() {
     let summary = sandbox.uninstall(&UninstallChoices {
         restore_vscode: true,
         remove_data: false,
+        ..UninstallChoices::default()
     });
     assert_eq!(failed_ids(&summary), Vec::<&str>::new(), "{summary:?}");
 
@@ -383,6 +384,7 @@ fn uninstalling_does_not_clobber_settings_changed_since_the_install() {
     let summary = sandbox.uninstall(&UninstallChoices {
         restore_vscode: true,
         remove_data: false,
+        ..UninstallChoices::default()
     });
     assert_eq!(failed_ids(&summary), Vec::<&str>::new());
     assert_eq!(setting(&settings, EXTERNAL_BROWSER), Some(json!(r"C:\Browsers\other.exe")));
@@ -406,6 +408,7 @@ fn uninstalling_can_delete_blocklists_and_settings() {
     let removed = sandbox.uninstall(&UninstallChoices {
         restore_vscode: false,
         remove_data: true,
+        ..UninstallChoices::default()
     });
     assert_eq!(failed_ids(&removed), Vec::<&str>::new());
     assert!(!sandbox.locations.data_dir.exists());
@@ -440,6 +443,179 @@ fn uninstalling_from_the_installed_copy_schedules_its_removal() {
         std::thread::sleep(std::time::Duration::from_millis(250));
     }
     assert!(!installed.exists(), "the installed setup copy should be deleted after a moment");
+}
+
+const ABSENT_DISTRO: &str = "Linkgate-Test-Absent";
+
+fn step_message<'a>(summary: &'a Summary, id: &str) -> &'a str {
+    summary
+        .steps
+        .iter()
+        .find(|step| step.id == id)
+        .and_then(|step| step.message.as_deref())
+        .unwrap_or_else(|| panic!("no message for step {id}"))
+}
+
+fn package_record_for(distro: &str) -> state::WslRecord {
+    state::WslRecord {
+        distro: distro.into(),
+        browser_env_file: None,
+        installed_packages: Some(state::PackageRecord {
+            manager: "apt-get".into(),
+            packages: vec!["xdg-utils".into()],
+        }),
+    }
+}
+
+#[test]
+fn package_installs_are_refused_in_test_mode_and_skip_the_wsl_setup() {
+    let sandbox = Sandbox::new("pkgrefused");
+    let choices = InstallChoices {
+        wsl_distros: vec![ABSENT_DISTRO.into()],
+        install_packages: vec![ABSENT_DISTRO.into()],
+        ..InstallChoices::default()
+    };
+    let summary = sandbox.install(&choices).unwrap();
+    let packages_id = format!("packages:{ABSENT_DISTRO}");
+    let wsl_id = format!("wsl:{ABSENT_DISTRO}");
+    assert_eq!(failed_ids(&summary), vec![packages_id.as_str(), wsl_id.as_str()]);
+    assert!(step_message(&summary, &packages_id).contains("turned off in test mode"));
+    assert!(step_message(&summary, &wsl_id).starts_with("Skipped"));
+    let record = state::load(&sandbox.locations.record_path()).unwrap();
+    assert!(record.wsl.is_empty());
+}
+
+#[test]
+fn consent_for_a_distro_that_is_not_ticked_adds_no_step() {
+    let sandbox = Sandbox::new("pkgunticked");
+    let ctx = Context {
+        locations: &sandbox.locations,
+        source: &sandbox.source,
+        current_exe: &std::env::current_exe().unwrap(),
+    };
+    let choices = InstallChoices {
+        install_packages: vec![ABSENT_DISTRO.into()],
+        ..InstallChoices::default()
+    };
+    let mut events: Vec<Event> = Vec::new();
+    install::run(&ctx, &choices, &mut |event| events.push(event)).unwrap();
+    let Some(Event::Plan { steps }) = events.first() else {
+        panic!("the first event should be the plan");
+    };
+    assert!(steps.iter().all(|step| !step.id.starts_with("packages:") && !step.id.starts_with("wsl:")));
+}
+
+#[test]
+fn a_distro_without_consent_gets_no_package_step() {
+    let sandbox = Sandbox::new("pkgnoconsent");
+    let choices = InstallChoices {
+        wsl_distros: vec![ABSENT_DISTRO.into()],
+        ..InstallChoices::default()
+    };
+    let summary = sandbox.install(&choices).unwrap();
+    assert!(summary.steps.iter().all(|step| !step.id.starts_with("packages:")));
+}
+
+#[test]
+fn a_repeated_install_keeps_the_record_of_packages_it_added_earlier() {
+    let sandbox = Sandbox::new("pkgkeep");
+    sandbox.install(&InstallChoices::default()).unwrap();
+    let path = sandbox.locations.record_path();
+    let mut record = state::load(&path).unwrap();
+    record.wsl.push(package_record_for(ABSENT_DISTRO));
+    state::save(&path, &record).unwrap();
+    let choices = InstallChoices {
+        wsl_distros: vec![ABSENT_DISTRO.into()],
+        ..InstallChoices::default()
+    };
+    sandbox.install(&choices).unwrap();
+    let after = state::load(&path).unwrap();
+    assert_eq!(after.wsl, vec![package_record_for(ABSENT_DISTRO)]);
+}
+
+#[test]
+fn uninstalling_offers_package_removal_only_for_what_the_installer_added() {
+    let sandbox = Sandbox::new("pkguninstall");
+    sandbox.install(&InstallChoices::default()).unwrap();
+    let path = sandbox.locations.record_path();
+    let mut record = state::load(&path).unwrap();
+    record.wsl.push(package_record_for(ABSENT_DISTRO));
+    state::save(&path, &record).unwrap();
+
+    let kept = sandbox.uninstall(&UninstallChoices::default());
+    assert!(kept.steps.iter().all(|step| !step.id.starts_with("packages:")));
+
+    state::save(&path, &record).unwrap();
+    let removed = sandbox.uninstall(&UninstallChoices {
+        remove_packages: vec![ABSENT_DISTRO.into()],
+        ..UninstallChoices::default()
+    });
+    let id = format!("packages:{ABSENT_DISTRO}");
+    assert!(failed_ids(&removed).contains(&id.as_str()));
+    assert!(step_message(&removed, &id).contains("turned off in test mode"));
+}
+
+#[test]
+fn removal_is_never_offered_for_a_distro_without_a_package_record() {
+    let sandbox = Sandbox::new("pkgnorecord");
+    sandbox.install(&InstallChoices::default()).unwrap();
+    let path = sandbox.locations.record_path();
+    let mut record = state::load(&path).unwrap();
+    record.wsl.push(state::WslRecord {
+        distro: ABSENT_DISTRO.into(),
+        browser_env_file: None,
+        installed_packages: None,
+    });
+    state::save(&path, &record).unwrap();
+    let removed = sandbox.uninstall(&UninstallChoices {
+        remove_packages: vec![ABSENT_DISTRO.into()],
+        ..UninstallChoices::default()
+    });
+    assert!(removed.steps.iter().all(|step| !step.id.starts_with("packages:")));
+}
+
+#[test]
+#[ignore = "runs against a real WSL distro that has no xdg-utils, set LINKGATE_SETUP_TEST_DISTRO"]
+fn the_package_flow_runs_through_a_fake_package_manager_in_a_real_distro() {
+    let distro = std::env::var("LINKGATE_SETUP_TEST_DISTRO").expect("LINKGATE_SETUP_TEST_DISTRO");
+    let shim = format!("/tmp/linkgate-setup-shim-{}", std::process::id());
+    let log = format!("{shim}/log");
+    let make = format!(
+        "set -eu; mkdir -p {shim}; printf '#!/bin/sh\\necho \"$@\" >> {log}\\n' > {shim}/apt-get; chmod +x {shim}/apt-get"
+    );
+    crate::wsl::run(&distro, &make, None).unwrap();
+
+    let mut sandbox = Sandbox::new("pkgreal");
+    sandbox.locations.package_shim = Some(shim.clone());
+    let choices = InstallChoices {
+        wsl_distros: vec![distro.clone()],
+        install_packages: vec![distro.clone()],
+        ..InstallChoices::default()
+    };
+    let summary = sandbox.install(&choices).unwrap();
+    let packages_id = format!("packages:{distro}");
+    let status = |id: &str| summary.steps.iter().find(|s| s.id == id).map(|s| s.status);
+    assert_eq!(status(&packages_id), Some(Status::Done), "{summary:?}");
+    assert_eq!(step_message(&summary, &packages_id), "Installed xdg-utils.");
+    let record = state::load(&sandbox.locations.record_path()).unwrap();
+    let added = record.wsl.iter().find(|r| r.distro == distro).and_then(|r| r.installed_packages.clone());
+    assert_eq!(added.map(|a| a.packages), Some(vec!["xdg-utils".to_string()]));
+
+    let removed = sandbox.uninstall(&UninstallChoices {
+        remove_packages: vec![distro.clone()],
+        ..UninstallChoices::default()
+    });
+    let removed_status = removed.steps.iter().find(|s| s.id == packages_id).map(|s| s.status);
+    assert_eq!(removed_status, Some(Status::Done), "{removed:?}");
+
+    let log_text = crate::wsl::run(&distro, &format!("cat {log}"), None).unwrap();
+    crate::wsl::run(&distro, &format!("rm -rf {shim}"), None).unwrap();
+    let lines: Vec<&str> = log_text.lines().collect();
+    assert_eq!(
+        lines,
+        vec!["install -y --no-install-recommends xdg-utils", "remove -y xdg-utils"],
+        "{log_text}"
+    );
 }
 
 #[test]

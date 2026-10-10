@@ -7,10 +7,11 @@ use crate::fsutil;
 use crate::install::{self, Context, EXTERNAL_BROWSER, OPEN_LOCALHOST};
 use crate::jsonc;
 use crate::logging;
+use crate::packages::{self, WslRunner};
 use crate::progress::{Event, Status, StepPlan, Steps, Summary};
 use crate::registry;
 use crate::shortcut;
-use crate::state::{self, InstallRecord, VsCodeRecord};
+use crate::state::{self, InstallRecord, PackageRecord, VsCodeRecord, WslRecord};
 use crate::wsl;
 
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -20,6 +21,8 @@ pub struct UninstallChoices {
     pub restore_vscode: bool,
     #[serde(default)]
     pub remove_data: bool,
+    #[serde(default)]
+    pub remove_packages: Vec<String>,
 }
 
 fn step(id: impl Into<String>, label: impl Into<String>) -> StepPlan {
@@ -33,6 +36,12 @@ fn plan(ctx: &Context, record: &InstallRecord, choices: &UninstallChoices) -> Ve
     let mut steps = Vec::new();
     for item in &record.wsl {
         steps.push(step(format!("wsl:{}", item.distro), format!("Remove the WSL setup from {}", item.distro)));
+        if let Some(added) = removable_packages(item, choices) {
+            steps.push(step(
+                format!("packages:{}", item.distro),
+                format!("Remove {} from {}", added.packages.join(" and "), item.distro),
+            ));
+        }
     }
     if choices.restore_vscode {
         for item in &record.vscode {
@@ -53,6 +62,25 @@ fn plan(ctx: &Context, record: &InstallRecord, choices: &UninstallChoices) -> Ve
     }
     steps.push(step("record", "Forget this install"));
     steps
+}
+
+fn removable_packages<'a>(item: &'a WslRecord, choices: &UninstallChoices) -> Option<&'a PackageRecord> {
+    item.installed_packages
+        .as_ref()
+        .filter(|_| choices.remove_packages.contains(&item.distro))
+}
+
+fn remove_packages(ctx: &Context, distro: &str, added: &PackageRecord) -> Result<Option<String>, String> {
+    if ctx.locations.is_sandboxed() && ctx.locations.package_shim.is_none() {
+        return Err("Package removal is turned off in test mode.".into());
+    }
+    if !install::valid_distro(distro) {
+        return Err(format!("{distro:?} isn't a usable WSL distribution name."));
+    }
+    let runner = WslRunner {
+        shim: ctx.locations.package_shim.clone(),
+    };
+    packages::remove(&runner, distro, added).map(|_| None)
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -195,6 +223,11 @@ pub fn run(ctx: &Context, choices: &UninstallChoices, report: &mut dyn FnMut(Eve
         let script = wsl::uninstall_script(item.browser_env_file.as_deref());
         let outcome = wsl::run(&item.distro, &script, locations.wsl_home.as_deref()).map(|_| None);
         steps.finish(&id, outcome);
+        if let Some(added) = removable_packages(item, choices) {
+            let id = format!("packages:{}", item.distro);
+            steps.start(&id);
+            steps.finish(&id, remove_packages(ctx, &item.distro, added));
+        }
     }
 
     if choices.restore_vscode {
