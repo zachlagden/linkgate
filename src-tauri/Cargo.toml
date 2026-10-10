@@ -26,7 +26,7 @@ base64 = "0.22"
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
 arboard = { version = "3", default-features = false }
-png = "0.17"
+png = "0.18"
 ureq = { version = "2", default-features = false, features = ["native-tls"] }
 native-tls = "0.2"
 windows = { version = "0.61", features = [
