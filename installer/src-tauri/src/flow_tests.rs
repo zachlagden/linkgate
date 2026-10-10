@@ -42,18 +42,39 @@ impl Sandbox {
 
     fn publish(&self, version: &str, exe: &[u8], setup: Option<&[u8]>) {
         std::fs::write(self.source_dir.join("linkgate.exe"), exe).unwrap();
-        let mut sums = format!("{}  linkgate.exe\n", sha256_hex(exe));
+        let mut digests = serde_json::Map::new();
+        digests.insert("linkgate.exe".into(), json!(format!("sha256:{}", sha256_hex(exe))));
         match setup {
             Some(bytes) => {
                 std::fs::write(self.source_dir.join("linkgate-setup.exe"), bytes).unwrap();
-                sums.push_str(&format!("{}  linkgate-setup.exe\n", sha256_hex(bytes)));
+                digests.insert("linkgate-setup.exe".into(), json!(format!("sha256:{}", sha256_hex(bytes))));
             }
             None => {
                 let _ = std::fs::remove_file(self.source_dir.join("linkgate-setup.exe"));
             }
         }
-        std::fs::write(self.source_dir.join("SHA256SUMS"), sums).unwrap();
+        let _ = std::fs::remove_file(self.source_dir.join("SHA256SUMS"));
+        std::fs::write(self.source_dir.join("digests.json"), serde_json::to_vec(&digests).unwrap()).unwrap();
         std::fs::write(self.source_dir.join("VERSION"), version).unwrap();
+    }
+
+    fn set_digest(&self, name: &str, value: &str) {
+        let path = self.source_dir.join("digests.json");
+        let mut digests: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        digests.insert(name.into(), json!(value));
+        std::fs::write(path, serde_json::to_vec(&digests).unwrap()).unwrap();
+    }
+
+    fn use_sums_file_instead(&self) {
+        let mut sums = String::new();
+        for name in ["linkgate.exe", "linkgate-setup.exe"] {
+            if let Ok(bytes) = std::fs::read(self.source_dir.join(name)) {
+                sums.push_str(&format!("{}  {name}\n", sha256_hex(&bytes)));
+            }
+        }
+        std::fs::write(self.source_dir.join("SHA256SUMS"), sums).unwrap();
+        std::fs::remove_file(self.source_dir.join("digests.json")).unwrap();
     }
 
     fn vscode_settings(&self, id: &str) -> PathBuf {
@@ -196,24 +217,62 @@ fn updating_keeps_the_original_settings_and_the_first_backup() {
     assert_eq!(std::fs::read_to_string(backup).unwrap(), ORIGINAL_SETTINGS);
 }
 
-#[test]
-fn a_checksum_mismatch_installs_nothing() {
-    let sandbox = Sandbox::new("badsum");
-    std::fs::write(sandbox.source_dir.join("SHA256SUMS"), format!("{}  linkgate.exe\n", sha256_hex(b"other"))).unwrap();
-    let error = sandbox.install(&InstallChoices::default()).unwrap_err();
-    assert!(error.contains("checksum"), "{error}");
+fn assert_nothing_installed(sandbox: &Sandbox) {
     assert!(!sandbox.locations.exe_path().exists());
     assert!(!sandbox.locations.start_menu_shortcut().exists());
     assert!(!registry::exists(&sandbox.locations));
 }
 
 #[test]
-fn a_release_without_checksums_installs_nothing() {
-    let sandbox = Sandbox::new("nosums");
-    std::fs::remove_file(sandbox.source_dir.join("SHA256SUMS")).unwrap();
+fn a_matching_digest_installs() {
+    let sandbox = Sandbox::new("digest");
+    sandbox.install(&InstallChoices::default()).unwrap();
+    assert_eq!(std::fs::read(sandbox.locations.exe_path()).unwrap(), fake_exe_bytes());
+}
+
+#[test]
+fn a_digest_mismatch_installs_nothing() {
+    let sandbox = Sandbox::new("baddigest");
+    sandbox.set_digest("linkgate.exe", &format!("sha256:{}", sha256_hex(b"other")));
     let error = sandbox.install(&InstallChoices::default()).unwrap_err();
-    assert!(error.contains("SHA256SUMS"), "{error}");
-    assert!(!sandbox.locations.exe_path().exists());
+    assert!(error.contains("checksum"), "{error}");
+    assert_nothing_installed(&sandbox);
+}
+
+#[test]
+fn a_malformed_digest_installs_nothing() {
+    let sandbox = Sandbox::new("garbled");
+    sandbox.set_digest("linkgate.exe", "md5:not-a-sha256");
+    let error = sandbox.install(&InstallChoices::default()).unwrap_err();
+    assert!(error.contains("unreadable checksum"), "{error}");
+    assert_nothing_installed(&sandbox);
+}
+
+#[test]
+fn a_release_with_only_a_sums_file_still_installs() {
+    let sandbox = Sandbox::new("sumsonly");
+    sandbox.use_sums_file_instead();
+    sandbox.install(&InstallChoices::default()).unwrap();
+    assert_eq!(std::fs::read(sandbox.locations.exe_path()).unwrap(), fake_exe_bytes());
+}
+
+#[test]
+fn a_sums_file_mismatch_installs_nothing() {
+    let sandbox = Sandbox::new("badsum");
+    std::fs::remove_file(sandbox.source_dir.join("digests.json")).unwrap();
+    std::fs::write(sandbox.source_dir.join("SHA256SUMS"), format!("{}  linkgate.exe\n", sha256_hex(b"other"))).unwrap();
+    let error = sandbox.install(&InstallChoices::default()).unwrap_err();
+    assert!(error.contains("checksum"), "{error}");
+    assert_nothing_installed(&sandbox);
+}
+
+#[test]
+fn a_release_without_any_checksum_installs_nothing() {
+    let sandbox = Sandbox::new("nosums");
+    std::fs::remove_file(sandbox.source_dir.join("digests.json")).unwrap();
+    let error = sandbox.install(&InstallChoices::default()).unwrap_err();
+    assert!(error.contains("publishes no checksum"), "{error}");
+    assert_nothing_installed(&sandbox);
 }
 
 #[test]
@@ -284,6 +343,19 @@ fn running_from_the_installed_copy_refreshes_it_from_the_release() {
     assert_eq!(std::fs::read(&installed).unwrap(), b"MZ-new-installer");
     let note = summary.steps.iter().find(|s| s.id == "setupcopy").unwrap().message.clone().unwrap();
     assert!(note.contains("no newer installer"), "{note}");
+}
+
+#[test]
+fn the_installed_copy_refreshes_from_a_release_that_only_has_a_sums_file() {
+    let sandbox = Sandbox::new("sumsrefresh");
+    let installed = sandbox.locations.setup_path();
+    std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
+    std::fs::write(&installed, b"MZ-old-installer").unwrap();
+    sandbox.publish("9.9.9", &fake_exe_bytes(), Some(b"MZ-new-installer"));
+    sandbox.use_sums_file_instead();
+    let summary = sandbox.install_as(&InstallChoices::default(), &installed).unwrap();
+    assert_eq!(failed_ids(&summary), Vec::<&str>::new());
+    assert_eq!(std::fs::read(&installed).unwrap(), b"MZ-new-installer");
 }
 
 #[test]

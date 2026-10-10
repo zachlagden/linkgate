@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -48,7 +47,6 @@ pub struct InstallChoices {
 struct Fetched {
     release: Release,
     exe: Vec<u8>,
-    sums: HashMap<String, String>,
 }
 
 pub fn windows_string(path: &Path) -> String {
@@ -101,21 +99,33 @@ fn plan(locations: &Locations, choices: &InstallChoices) -> Vec<StepPlan> {
     steps
 }
 
+fn expected_checksum(ctx: &Context, release: &Release, name: &str) -> Result<String, String> {
+    if let Some(digest) = release.digest_of(name) {
+        return checksums::parse_digest(name, digest);
+    }
+    if release.has(SUMS) {
+        let bytes = ctx.source.fetch(release, SUMS, &mut |_, _| {})?;
+        let sums = checksums::parse(&String::from_utf8_lossy(&bytes));
+        return checksums::lookup(name, &sums);
+    }
+    Err(format!(
+        "Release {} publishes no checksum for {name}, so it can't be checked and was not installed.",
+        release.version
+    ))
+}
+
 fn fetch(ctx: &Context, steps: &mut Steps) -> Result<Fetched, String> {
     let release = ctx.source.latest()?;
-    for name in [EXE, SUMS] {
-        if !release.has(name) {
-            return Err(format!("Release {} has no {name} file, so it can't be installed.", release.version));
-        }
+    if !release.has(EXE) {
+        return Err(format!("Release {} has no {EXE} file, so it can't be installed.", release.version));
     }
-    let sums_bytes = ctx.source.fetch(&release, SUMS, &mut |_, _| {})?;
-    let sums = checksums::parse(&String::from_utf8_lossy(&sums_bytes));
+    let expected = expected_checksum(ctx, &release, EXE)?;
     let exe = ctx.source.fetch(&release, EXE, &mut |done, total| steps.download(done, total))?;
-    checksums::verify(EXE, &exe, &sums)?;
+    checksums::verify(EXE, &exe, &expected)?;
     if !exe.starts_with(b"MZ") {
         return Err("The downloaded linkgate.exe isn't a Windows program, so it was not installed.".into());
     }
-    Ok(Fetched { release, exe, sums })
+    Ok(Fetched { release, exe })
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -136,8 +146,9 @@ fn keep_setup_copy(ctx: &Context, fetched: &Fetched) -> Result<Option<String>, S
     if !fetched.release.has(SETUP) {
         return Ok(Some("This release has no newer installer, so the installed one was kept.".into()));
     }
+    let expected = expected_checksum(ctx, &fetched.release, SETUP)?;
     let bytes = ctx.source.fetch(&fetched.release, SETUP, &mut |_, _| {})?;
-    checksums::verify(SETUP, &bytes, &fetched.sums)?;
+    checksums::verify(SETUP, &bytes, &expected)?;
     fsutil::replace_file(&target, &bytes)?;
     Ok(Some("The installer was refreshed from the release.".into()))
 }
