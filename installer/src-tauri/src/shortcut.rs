@@ -83,7 +83,7 @@ mod tests {
         create(&shortcut, &target).unwrap();
         assert!(shortcut.is_file());
         let resolved = target_of(&shortcut).expect("shortcut should resolve");
-        assert!(resolved.eq_ignore_ascii_case(&target.to_string_lossy()), "{resolved}");
+        assert_eq!(std::fs::canonicalize(&resolved).unwrap(), std::fs::canonicalize(&target).unwrap());
         remove(&shortcut).unwrap();
         assert!(!shortcut.exists());
         remove(&shortcut).unwrap();

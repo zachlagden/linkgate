@@ -139,7 +139,7 @@ fn installs_the_app_shortcuts_registry_entry_and_record() {
     assert!(locations.setup_path().is_file());
     for lnk in [locations.start_menu_shortcut(), locations.desktop_shortcut()] {
         let target = shortcut::target_of(&lnk).unwrap();
-        assert!(target.eq_ignore_ascii_case(&locations.exe_path().to_string_lossy()), "{target}");
+        assert_eq!(std::fs::canonicalize(&target).unwrap(), std::fs::canonicalize(locations.exe_path()).unwrap());
     }
     assert_eq!(registry::read_value(locations, "DisplayVersion").as_deref(), Some("9.9.9"));
     let uninstall_string = registry::read_value(locations, "UninstallString").unwrap();
