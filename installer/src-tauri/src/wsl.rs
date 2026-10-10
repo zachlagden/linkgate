@@ -46,10 +46,11 @@ fn single_quoted(text: &str) -> String {
 }
 
 fn with_newline(text: &str) -> String {
-    if text.ends_with('\n') {
-        text.to_string()
+    let unix = text.replace("\r\n", "\n");
+    if unix.ends_with('\n') {
+        unix
     } else {
-        format!("{text}\n")
+        format!("{unix}\n")
     }
 }
 
@@ -194,6 +195,13 @@ mod tests {
         }
         assert_eq!(script.matches("\nLINKGATE_OPEN_EOF\n").count(), 1);
         assert_eq!(script.matches("\nLINKGATE_DESKTOP_EOF\n").count(), 1);
+    }
+
+    #[test]
+    fn embedded_templates_never_carry_carriage_returns() {
+        assert_eq!(with_newline("a\r\nb\r\n"), "a\nb\n");
+        assert_eq!(with_newline("a\r\nb"), "a\nb\n");
+        assert!(!install_script(EXE, BrowserEnv::Zshenv).contains('\r'));
     }
 
     #[test]
