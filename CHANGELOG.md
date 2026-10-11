@@ -2,13 +2,25 @@
 
 ## [Unreleased]
 
+## [0.2.1]
+
+This release changes the installer and updates the dependencies of both programs. The blocklist and update checks in `linkgate.exe` behave as before.
+
 ### Changed
 
+- Dependencies are updated in both programs, including Tauri, the `ureq` 3 HTTP client and Vite.
 - The installer checks downloads against the SHA256 digest GitHub publishes for each release file, so new releases no longer include a `SHA256SUMS` file. It still reads `SHA256SUMS` from releases that have one, and it refuses to install a file it can't check.
 
 ### Added
 
 - The installer checks each WSL distribution for `xdg-utils`, `python3`, `bash` and `awk`, and offers to install what is missing with `apt-get`, `dnf`, `pacman`, `zypper` or `apk`, as root and only when you leave the box ticked. Uninstalling offers to remove only the packages the installer added.
+
+### Fixed
+
+- The installer wrote the WSL handler files with Windows line endings, which made `xdg-open` fail with "Permission denied". It now writes them with Unix line endings.
+- Package installs work on Alpine, where `apk` lives in `/sbin`, and on Arch Linux, where the package lists are refreshed after a failed install. The installer also installs `bash` on Alpine and `awk` on openSUSE when they are missing.
+- The install and uninstall windows no longer scroll sideways when the install path is long.
+- Uninstalling leaves no `linkgate-setup.exe` or install folder behind when the installer takes a few seconds to exit.
 
 ## [0.2.0]
 
