@@ -28,7 +28,7 @@ winreg = "0.56"
 arboard = { version = "3", default-features = false }
 png = "0.18"
 ureq = { version = "3", default-features = false, features = ["native-tls"] }
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Graphics_Dwm",
   "Win32_Graphics_Gdi",
